@@ -13,30 +13,6 @@ class SceneA extends Phaser.Scene {
     create ()
     {
 
-        
-        this.gridData = {};
-
-        this.createGrid ();
-
-        this.createField ()
-
-
-        var _this = this;
-
-        this.input.on ('pointerup', function () {
-           //_this.startDrag = false;
-            this.getRandomFleetPos ();
-
-        }, this);
-        this.input.on ('pointermove', function ( pointer ) {
-            //
-            if ( _this.startDrag ) {
-
-                _this.dragged.x = pointer.x + _this.gap.x;
-                _this.dragged.y = pointer.y + _this.gap.y;
-                
-            }
-        });
 
         this.fleetData = [
             { len:5, type: 'carrier'},
@@ -47,20 +23,29 @@ class SceneA extends Phaser.Scene {
             { len:2, type: 'destroyer'},
         ];
 
+        this.playersGridData = {};
+
+        this.initGridData ();
+
+        this.createField ();
+
+        this.time.delayedCall ( 1000, () => this.createFleet(), [], this );
 
     }
 
-    createGrid ( plyr = 'self' ) // self or oppo 
+    
+    initGridData ()
     {
 
-        this.gridData [ plyr ] = [];
+        this.playersGridData ['self'] = [];
 
-        for ( var i = 0; i < 100; i++ ) {
-
-            const xp = Math.floor ( i/10 ), yp = i % 10;
-            
-            this.gridData [plyr].push (0);
+        this.playersGridData ['oppo'] = [];
         
+        for ( var i=0; i < 100; i++ ) {
+
+            this.playersGridData ['self'].push (0);
+
+            this.playersGridData ['oppo'].push (0);
         }
 
     }
@@ -91,80 +76,119 @@ class SceneA extends Phaser.Scene {
 
     }
 
-    getRandomFleetPos ( plyr = 'self') 
+    createFleet ( plyr = 'self ')
     {
-     
-        let myArr = [];
 
+        const fleetPos = this.getRandomFleetPos (plyr);
+
+        console.log ( fleetPos );
+
+    }
+
+
+    getRandomFleetPos ( plyr ) 
+    {
+        
+        //create grid 10 x 10..
+        let tmpArr = [];
+
+        //create temp grid..
+        let tempGridData = [];
+
+        for ( var i = 0; i < 100; i++ ) {
+            tempGridData.push (0);
+        }
+
+        //
         let counter = 0;
 
         for ( var i in this.fleetData ) {
 
             let gridCheck = false;
 
+            const len = this.fleetData [i].len;
+
             do {
 
-                let randGridPos = Math.floor ( Math.random() * 100 );
+                let rndGridPos = Math.floor ( Math.random() * 100 );
 
-                let gridPostData = this.checkGridPos ( plyr, randGridPos, this.fleetData [i].len )
+                const r = Math.floor ( rndGridPos / 10 ), c = rndGridPos % 10;
+        
+                let countH = 0, countV = 0;
 
-                if ( gridPostData.v || gridPostData.h ) {
 
-                    myArr.push ({
-                        gridPos : randGridPos,
-                        rotation : ( gridPostData.v ) ? 0 : 1
-                    });
+                //check if horizontal or vertical position is good..
+
+                for ( let i = 0; i < len; i++) {
+
+                    //check vertical
+                    if ( (r + i) < 10 ) {
+
+                        let gridPosV = ((r + i) * 10) + c;
+
+                        if ( tempGridData [ gridPosV ] == 0 ) countV += 1;
+
+                    }
+
+                    // check horizontal 
+                    if ( (c + i) < 10 ) {
+
+                        let gridPosH = (r * 10) + c + i;
+
+                        if ( tempGridData [ gridPosH ] == 0 ) countH += 1;
+                        
+                    }
+
+                }
+                
+
+                //
+                if ( countH >= len || countV >= len ) {
+
+                    let rot = ( countH >= len ) ? 0 : 1;
+
+                    for ( let i = 0; i < len; i++ ) {
+
+                        if ( rot == 1 ) {
+
+                            let vertical = ((r + i) * 10) + c;
+
+                            console.log ('v', vertical );
+
+                            tempGridData [ vertical ] =  1;
+
+                        }else {
+                            
+                            let horizontal = (r * 10) + c + i;
+
+                            console.log ('h', horizontal );
+
+                            tempGridData [ horizontal ] =  1;
+                        }
+
+                    }
+
+                    tmpArr.push ({ 'gridPos' : rndGridPos, 'rotation' : rot });
 
                     gridCheck = true;
+
                 }
 
-                counter += 1;
+                console.log ('done here..');
+
+
 
             } while ( !gridCheck );
 
         
         }
 
-        return myArr;
-
-    }
-
-    checkGridPos ( plyr, gridNumbr, len )
-    {
-
-        const r = Math.floor ( gridNumbr / 10 ), c = gridNumbr % 10;
-        
-        let countH = 0, countV = 0;
-
-        for ( let i = 0; i < len; i++) {
-
-            //check horizontal
-            if ( (r + i) < 10 ) {
-
-                let gridPosH = ((r + i) * 10) + c;
-
-                if ( this.gridData [plyr][gridPosH] == 0 ) countH += 1;
-
-            }
-
-            //checkVertical 
-            if ( (c + i) < 10 ) {
-
-                let gridPosV = (r * 10) + c + i;
-
-                if ( this.gridData [plyr][gridPosV] == 0 ) countV += 1;
-                
-            }
-
-        }
-
-        return { h : countH == len , v : countV == len };
+        return tmpArr;
 
 
     }
 
 
-   
 
     update ( time, delta ) {
       
