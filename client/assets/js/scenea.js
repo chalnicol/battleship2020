@@ -33,7 +33,6 @@ class SceneA extends Phaser.Scene {
 
     }
 
-    
     initGridData ()
     {
 
@@ -56,7 +55,7 @@ class SceneA extends Phaser.Scene {
         //1920 1080
         this.fieldCont = this.add.container ( 0, 0 );
 
-        const cz = 80; //cellsize
+        const cz = 60; //cellsize
 
         const  cx = (960 - (cz*10))/2  + cz/2, cy = 100;
 
@@ -64,27 +63,57 @@ class SceneA extends Phaser.Scene {
 
             let ix = Math.floor ( j/10), iy = j % 10;
 
-            let rct = this.add.rectangle ( cx + iy * cz, cy + ix * cz, cz, cz, 0xcecece, 1 ).setStrokeStyle ( 1, 0x9e9e9e );
+            let minicont = this.add.container (  cx + iy * cz, cy + ix * cz ).setName ('cell' + j );
 
-            let txt = this.add.text ( cx + iy * cz, cy + ix * cz, ix +':' + iy, { fontSize: 20, fontFamily:'Arial', color:'#000' });
+            let rct = this.add.rectangle ( 0, 0, cz, cz, 0xcecece, 1 ).setStrokeStyle ( 1, 0x9e9e9e );
 
-            let txtb = this.add.text ( cx + (iy * cz) - cz/2 , cy + (ix * cz) - cz/2, j, { fontSize: 20, fontFamily:'Arial', color:'#888' });
+            //let txta = this.add.text ( 0, 0, ix +':' + iy, { fontSize: 20, fontFamily:'Arial', color:'#000' });
+
+            let txt = this.add.text ( -cz/2, -cz/2, j, { fontSize: 20, fontFamily:'Arial', color:'#888' });
             
+            minicont.add( [rct, txt] );
 
-            this.fieldCont.add( [rct, txtb, txt] );
+            this.fieldCont.add ( minicont );
+
         }
 
     }
 
-    createFleet ( plyr = 'self ')
+    createFleet ( plyr = 'self' )
     {
 
         const fleetPos = this.getRandomFleetPos (plyr);
 
         console.log ( fleetPos );
 
-    }
+        for ( var i in fleetPos ) {
 
+            let cell = this.fieldCont.getByName ('cell' + fleetPos [i].gridPos );
+
+            let ship = new Ship ( this, cell.x, cell.y, i, this.fleetData[i].type, 60, this.fleetData[i].len, fleetPos [i].rotation );
+
+            ship.on ('pointerdown', function () {
+                this.changeOrientation();
+            });
+
+
+            for ( var j = 0; j < this.fleetData[i].len; j++ ) {
+
+                if ( fleetPos [i].rotation == 0 ) {
+                    //..
+                    this.playersGridData [plyr] [ fleetPos [i].gridPos + j ] = 1;
+
+                }else {
+                    //..
+                    this.playersGridData [plyr] [ fleetPos [i].gridPos + ( j * 10 )] = 1;
+                    
+                }
+
+            }
+        }
+
+
+    }
 
     getRandomFleetPos ( plyr ) 
     {
@@ -126,7 +155,7 @@ class SceneA extends Phaser.Scene {
 
                         let gridPosV = ((r + i) * 10) + c;
 
-                        if ( tempGridData [ gridPosV ] == 0 ) countV += 1;
+                        if ( this.checkNearby ( gridPosV, tempGridData ) ) countV += 1;
 
                     }
 
@@ -135,7 +164,9 @@ class SceneA extends Phaser.Scene {
 
                         let gridPosH = (r * 10) + c + i;
 
-                        if ( tempGridData [ gridPosH ] == 0 ) countH += 1;
+                        if ( this.checkNearby ( gridPosH, tempGridData ) ) countH += 1;
+
+                        //if ( tempGridData [ gridPosH ] == 0 ) countH += 1;
                         
                     }
 
@@ -151,19 +182,19 @@ class SceneA extends Phaser.Scene {
 
                         if ( rot == 1 ) {
 
-                            let vertical = ((r + i) * 10) + c;
+                            //let vrt = ((r + i) * 10) + c;
 
-                            console.log ('v', vertical );
+                            let vrt = rndGridPos + (i * 10);
 
-                            tempGridData [ vertical ] =  1;
+                            tempGridData [ vrt ] =  1;
 
                         }else {
                             
-                            let horizontal = (r * 10) + c + i;
+                            //let hor = (r * 10) + c + i;
 
-                            console.log ('h', horizontal );
+                            let hor = rndGridPos + i;
 
-                            tempGridData [ horizontal ] =  1;
+                            tempGridData [ hor ] =  1;
                         }
 
                     }
@@ -185,10 +216,40 @@ class SceneA extends Phaser.Scene {
 
         return tmpArr;
 
-
     }
 
 
+    checkNearby ( gridPos, arr ) {
+
+        const r = Math.floor ( gridPos / 10 ), c = gridPos % 10;
+
+        let center = false;
+        if ( arr[gridPos] == 1 ) center = true;
+
+        let top = false;
+        if ( r - 1 >= 0 ) {
+            if ( arr [ gridPos - 10 ] == 1 ) top = true;
+        }
+
+        let bot = false;
+        if ( r + 1 < 10 ) {
+            if ( arr [ gridPos + 10 ] == 1 ) bot = true;
+        }
+
+        let left = false;
+        if ( c - 1 >= 0 ) {
+            if ( arr [ gridPos - 1 ] == 1 ) left = true;
+        }
+
+        let right = false;
+        if ( c + 1 < 10 ) {
+            if ( arr [ gridPos + 1 ] == 1 ) right = true;
+        }
+
+        return !center && !top && !bot && !left && !right;
+
+
+    }
 
     update ( time, delta ) {
       

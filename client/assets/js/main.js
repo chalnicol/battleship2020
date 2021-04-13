@@ -10,7 +10,7 @@ window.onload = function () {
             width: 1920,
             height: 1080
         },
-        backgroundColor: '#dedede',
+        backgroundColor: '#f3f3f3',
         scene: [ Preloader, SceneA ]
     };
 
