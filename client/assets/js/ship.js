@@ -34,7 +34,21 @@ class Ship extends Phaser.GameObjects.Container {
 
 
     }
-    
+
+
+    select ( selected = true )
+    {
+        this.isSelected = selected;
+
+        if ( this.isSelected ) {
+
+            this.first.setStrokeStyle ( 2, 0xff0000 );
+
+        }else {
+            this.first.setStrokeStyle (0);
+
+        }
+    }
     changeOrientation ()
     {
 

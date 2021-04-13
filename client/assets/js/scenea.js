@@ -23,6 +23,8 @@ class SceneA extends Phaser.Scene {
             { len:2, type: 'destroyer'},
         ];
 
+        this.shipSelected = -1;
+              
         this.playersGridData = {};
 
         this.initGridData ();
@@ -55,7 +57,7 @@ class SceneA extends Phaser.Scene {
         //1920 1080
         this.fieldCont = this.add.container ( 0, 0 );
 
-        const cz = 60; //cellsize
+        const cz = 70; //cellsize
 
         const  cx = (960 - (cz*10))/2  + cz/2, cy = 100;
 
@@ -90,26 +92,39 @@ class SceneA extends Phaser.Scene {
 
             let cell = this.fieldCont.getByName ('cell' + fleetPos [i].gridPos );
 
-            let ship = new Ship ( this, cell.x, cell.y, i, this.fleetData[i].type, 60, this.fleetData[i].len, fleetPos [i].rotation );
+            let ship = new Ship ( this, cell.x, cell.y, i, this.fleetData[i].type, 70, this.fleetData[i].len, fleetPos [i].rotation );
 
             ship.on ('pointerdown', function () {
-                this.changeOrientation();
+                
+                if ( this.isSelected ) {
+                    this.select ( false );
+                }else {
+                    this.select ();
+                }
+                
+                this.scene.resetSelect ();
+
             });
 
+            
 
-            for ( var j = 0; j < this.fleetData[i].len; j++ ) {
 
-                if ( fleetPos [i].rotation == 0 ) {
-                    //..
-                    this.playersGridData [plyr] [ fleetPos [i].gridPos + j ] = 1;
 
-                }else {
-                    //..
-                    this.playersGridData [plyr] [ fleetPos [i].gridPos + ( j * 10 )] = 1;
+            // for ( var j = 0; j < this.fleetData[i].len; j++ ) {
+
+            //     if ( fleetPos [i].rotation == 0 ) {
+            //         //..
+            //         this.playersGridData [plyr] [ fleetPos [i].gridPos + j ] = 1;
+
+            //     }else {
+            //         //..
+            //         this.playersGridData [plyr] [ fleetPos [i].gridPos + ( j * 10 )] = 1;
                     
-                }
+            //     }
 
-            }
+            // }
+
+
         }
 
 
@@ -218,6 +233,10 @@ class SceneA extends Phaser.Scene {
 
     }
 
+    resetSelect () 
+    {
+
+    }
 
     checkNearby ( gridPos, arr ) {
 
@@ -252,7 +271,7 @@ class SceneA extends Phaser.Scene {
     }
 
     update ( time, delta ) {
-      
+        //console.log ( time, delta  )
     }
 
 
