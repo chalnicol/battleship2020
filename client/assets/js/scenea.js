@@ -22,7 +22,6 @@ class SceneA extends Phaser.Scene {
             { frm : 4, len:2, type: 'destroyer'},
         ];
 
-<<<<<<< HEAD
         this.gameData = {
             'singlePlayer' : true,
             'withTimer' : false
@@ -35,11 +34,6 @@ class SceneA extends Phaser.Scene {
         this.fieldCont = this.add.container ( 0, 0 );
 
         
-=======
-        this.shipSelected = -1;
-              
-        this.playersGridData = {};
->>>>>>> a45830f0ce83d591f5b682752b7c4c2237de6b51
 
         this.initGridData ();
 
@@ -78,11 +72,7 @@ class SceneA extends Phaser.Scene {
 
         var px = (1920 - (2*(pW+pS)-pS))/2 + pW/2,
 
-<<<<<<< HEAD
             py = 75;
-=======
-        const cz = 70; //cellsize
->>>>>>> a45830f0ce83d591f5b682752b7c4c2237de6b51
 
         for ( var i = 0; i < 2; i++) {
 
@@ -157,7 +147,6 @@ class SceneA extends Phaser.Scene {
 
             let cell = this.fieldCont.getByName ( plyr + '_cell' + fleetPos [i].gridPos );
 
-<<<<<<< HEAD
             let ship = new Ship ( this, cell.x, cell.y, plyr, i, fleetPos[i].gridPos, fleetPos [i].rotation, this.cellSize, this.fleetData[i], enabled );
 
             ship.on ('pointerup', function () {
@@ -376,41 +365,6 @@ class SceneA extends Phaser.Scene {
 
             }
 
-=======
-            let ship = new Ship ( this, cell.x, cell.y, i, this.fleetData[i].type, 70, this.fleetData[i].len, fleetPos [i].rotation );
-
-            ship.on ('pointerdown', function () {
-                
-                if ( this.isSelected ) {
-                    this.select ( false );
-                }else {
-                    this.select ();
-                }
-                
-                this.scene.resetSelect ();
-
-            });
-
-            
-
-
-
-            // for ( var j = 0; j < this.fleetData[i].len; j++ ) {
-
-            //     if ( fleetPos [i].rotation == 0 ) {
-            //         //..
-            //         this.playersGridData [plyr] [ fleetPos [i].gridPos + j ] = 1;
-
-            //     }else {
-            //         //..
-            //         this.playersGridData [plyr] [ fleetPos [i].gridPos + ( j * 10 )] = 1;
-                    
-            //     }
-
-            // }
-
-
->>>>>>> a45830f0ce83d591f5b682752b7c4c2237de6b51
         }
 
         return counter >= len;
@@ -518,16 +472,7 @@ class SceneA extends Phaser.Scene {
 
     }
 
-<<<<<<< HEAD
     checkAdjacents ( gridPos, arr ) {
-=======
-    resetSelect () 
-    {
-
-    }
-
-    checkNearby ( gridPos, arr ) {
->>>>>>> a45830f0ce83d591f5b682752b7c4c2237de6b51
 
         const r = Math.floor ( gridPos / 10 ), c = gridPos % 10;
 
