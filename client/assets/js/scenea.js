@@ -13,33 +13,50 @@ class SceneA extends Phaser.Scene {
     create ()
     {
 
-
         this.fleetData = [
-            { len:5, type: 'carrier'},
-            { len:4, type: 'battleship'},
-            { len:3, type: 'cruiser'},
-            { len:3, type: 'submarine'},
-            { len:2, type: 'destroyer'},
-            { len:2, type: 'destroyer'},
+            { frm : 0, len:5, type: 'carrier'},
+            { frm : 1, len:4, type: 'battleship'},
+            { frm : 2, len:3, type: 'cruiser'},
+            { frm : 3, len:3, type: 'submarine'},
+            { frm : 4, len:2, type: 'destroyer'},
+            { frm : 4, len:2, type: 'destroyer'},
         ];
 
-        this.playersGridData = {};
+        this.gameData = {
+            'singlePlayer' : true,
+            'withTimer' : false
+        };
+
+        this.cellSize = 80;
+
+        this.selectedShip = '';
+
+        this.fieldCont = this.add.container ( 0, 0 );
+
+        
 
         this.initGridData ();
 
-        this.createField ();
+        this.createField ('self');
 
-        this.time.delayedCall ( 1000, () => this.createFleet(), [], this );
+        this.createPlayerIndicators ();
+
+        this.time.delayedCall ( 1000, () => {
+
+            this.createFleet('self', true); 
+
+            this.createControls();
+            
+            this.startPrep ();
+
+        }, [], this );
 
     }
 
     initGridData ()
     {
+        this.playersGridData = { self : [], oppo : [] };
 
-        this.playersGridData ['self'] = [];
-
-        this.playersGridData ['oppo'] = [];
-        
         for ( var i=0; i < 100; i++ ) {
 
             this.playersGridData ['self'].push (0);
@@ -49,87 +66,344 @@ class SceneA extends Phaser.Scene {
 
     }
 
-    createField ( plyr = 'self' )
+    createPlayerIndicators ()
+    {
+        var pW = 800, pH = 150, pS = 160;
+
+        var px = (1920 - (2*(pW+pS)-pS))/2 + pW/2,
+
+            py = 75;
+
+        for ( var i = 0; i < 2; i++) {
+
+            this.add.image ( px + i * ( pW + pS), py, 'pind' );
+
+        }
+
+
+    }
+
+    createControls ()
+    {
+        //..
+        var _this = this;
+
+        var buts = new MyButton ( this, 480, 1015, 800, 80, 'but0', '', '', 0, 'Ready', 40 );
+
+        buts.on('pointerup', function () {
+
+            this.removeInteractive ();
+
+            _this.add.tween ({
+                targets : this,
+                y : 1130,
+                duration : 200,
+                ease : 'Power2',
+                onComplete : () => {
+                    this.destroy ();
+                }
+            });
+
+            _this.endPrep ();
+
+        });
+    }
+
+    createField ( plyr )
     {
 
-        //1920 1080
-        this.fieldCont = this.add.container ( 0, 0 );
+        var cz = this.cellSize;
 
-        const cz = 60; //cellsize
+        const cx = plyr == 'self' ? (960 - (cz*10))/2 + cz/2 : 960 + (960 - (cz*10))/2 + cz/2,
+        
+              cy = 190;
 
-        const  cx = (960 - (cz*10))/2  + cz/2, cy = 100;
-
-        for ( let j = 0; j < 100; j++ ) {
+        for ( var j = 0; j < 100; j++ ) {
 
             let ix = Math.floor ( j/10), iy = j % 10;
 
-            let minicont = this.add.container (  cx + iy * cz, cy + ix * cz ).setName ('cell' + j );
+            let minicont = this.add.container (  cx + iy * cz, cy + ix * cz ).setSize(cz, cz).setName ( plyr + '_cell'+ j);
 
-            let rct = this.add.rectangle ( 0, 0, cz, cz, 0xcecece, 1 ).setStrokeStyle ( 1, 0x9e9e9e );
+            let rct = this.add.rectangle ( 0, 0, cz, cz, 0xdedede, 1 ).setStrokeStyle ( 2, 0x9e9e9e );
 
-            //let txta = this.add.text ( 0, 0, ix +':' + iy, { fontSize: 20, fontFamily:'Arial', color:'#000' });
-
-            let txt = this.add.text ( -cz/2, -cz/2, j, { fontSize: 20, fontFamily:'Arial', color:'#888' });
+            let txt = this.add.text ( -30, -30, j + 1, { fontSize: 16, fontFamily:'Oswald', color:'#888' });
             
-            minicont.add( [rct, txt] );
+            minicont.add([rct, txt]);
 
             this.fieldCont.add ( minicont );
 
         }
 
+       
+
     }
 
-    createFleet ( plyr = 'self' )
+    createFleet ( plyr, enabled = false )
     {
 
         const fleetPos = this.getRandomFleetPos (plyr);
 
-        console.log ( fleetPos );
-
         for ( var i in fleetPos ) {
 
-            let cell = this.fieldCont.getByName ('cell' + fleetPos [i].gridPos );
+            let cell = this.fieldCont.getByName ( plyr + '_cell' + fleetPos [i].gridPos );
 
-            let ship = new Ship ( this, cell.x, cell.y, i, this.fleetData[i].type, 60, this.fleetData[i].len, fleetPos [i].rotation );
+            let ship = new Ship ( this, cell.x, cell.y, plyr, i, fleetPos[i].gridPos, fleetPos [i].rotation, this.cellSize, this.fleetData[i], enabled );
 
-            ship.on ('pointerdown', function () {
-                this.changeOrientation();
-            });
+            ship.on ('pointerup', function () {
 
+                if ( this.lastClickTime == 0 ) {
 
-            for ( var j = 0; j < this.fleetData[i].len; j++ ) {
-
-                if ( fleetPos [i].rotation == 0 ) {
-                    //..
-                    this.playersGridData [plyr] [ fleetPos [i].gridPos + j ] = 1;
+                    this.lastClickTime = new Date ();
 
                 }else {
-                    //..
-                    this.playersGridData [plyr] [ fleetPos [i].gridPos + ( j * 10 )] = 1;
+
+                    var newClick = new Date ();
+
+                    if ( newClick - this.lastClickTime < 300 ) {
+
+                        this.scene.setPlayerGrid ( 'self', this.orgCell, this.len, this.isVertical ? 1 : 0, 0 );
+
+                        var postCheck = this.scene.postCheck ( this.orgCell, this.len, !this.isVertical );
+
+                        if  ( postCheck ) {
+
+                            this.changeOrientation();
+
+                            this.scene.setPlayerGrid ( 'self', this.orgCell, this.len, this.isVertical ? 1 : 0, 1 );
+
+                            //this.scene.checkPlayerGrid ();
+
+                        }else {
+                            console.log ('err');
+                        }
+                         
+                    }
+
+                    this.lastClickTime = newClick
+                }
+
+            });
+            
+            for ( var j = 0; j < this.fleetData[i].len; j++ ) {
+
+                var post = ( fleetPos [i].rotation == 0 ) ? fleetPos [i].gridPos + j : fleetPos [i].gridPos + (j*10);
+
+                this.playersGridData ['self'] [ post ] = 1;
+
+            }
+
+            this.fieldCont.add ( ship );
+
+        }
+
+    }
+
+    startPrep ()
+    {
+        for ( var i = 0; i < 6; i++ ) {
+
+            var ship = this.fieldCont.getByName ('self_ship' + i );
+
+            ship.select (true);
+
+            this.input.setDraggable(ship);
+
+        }
+
+        this.input.on('dragstart', function (pointer, gameObject) {
+
+            if ( gameObject.isSelected ) {
+
+                this.fieldCont.bringToTop(gameObject);
+
+                gameObject.origin = { x:gameObject.x, y: gameObject.y };
+
+                this.setPlayerGrid ( 'self', gameObject.orgCell, gameObject.len, gameObject.isVertical ? 1 : 0, 0 );
                     
+            }
+
+        }, this);
+
+        this.input.on('dragend', function (pointer, gameObject) {
+
+            if ( gameObject.isSelected ) {
+
+                var cell = this.getCellHit ( 'self', gameObject );
+
+                var post = {};
+
+                if ( cell != null ) {
+
+                    var postCheck = this.postCheck ( cell.id, gameObject.len, gameObject.isVertical );
+
+                    if (postCheck) {
+
+                        gameObject.orgCell = cell.id;
+
+                        this.setPlayerGrid ( 'self', cell.id, gameObject.len, gameObject.isVertical ? 1 : 0, 1 );
+
+                        //this.checkPlayerGrid ();
+
+                    }else {
+
+                        this.setPlayerGrid ( 'self', gameObject.orgCell, gameObject.len, gameObject.isVertical ? 1 : 0, 1 );
+
+                    }
+                    
+                    post.x = postCheck ? cell.x : gameObject.origin.x;
+                    post.y = postCheck ? cell.y : gameObject.origin.y;
+                    
+                }else {
+
+                    post.x =  gameObject.origin.x;
+                    post.y =  gameObject.origin.y;
+                    
+                }
+                    
+                this.tweens.add ({
+                    targets: gameObject,
+                    x : post.x,
+                    y : post.y,
+                    duration : 100,
+                    ease : 'Power2'
+                });
+
+            }
+
+        }, this);
+
+        this.input.on('drag', function (pointer, gameObject, dragX, dragY) {
+
+            if ( gameObject.isSelected){
+
+                gameObject.x = dragX;
+
+                gameObject.y = dragY;
+
+            }
+            
+            
+        }, this);
+
+    }
+
+    endPrep ()
+    {
+        //..
+        console.log ('this');
+
+        if ( this.gameData.singlePlayer ) {
+
+            for ( var i = 0; i < 6; i++ ) {
+                this.fieldCont.getByName ('self_ship' + i ).removeInteractive().select(false);
+            }
+
+            this.time.delayedCall ( 200, () => {
+
+                this.createField ('oppo');
+
+                this.createFleet ('oppo');
+
+                this.startCommence ();
+
+            }, [], this );
+            
+        }else {
+
+        }
+
+        
+    }
+
+    startCommence ()
+    {
+        //.
+    }
+
+    checkPlayerGrid () {
+
+        console.log ('->');
+
+        for ( var i = 0; i < 10; i++ ) {
+            console.log ( this.playersGridData['self'].slice ( i * 10, (i + 1) * 10 ));
+        }
+    }
+
+    setPlayerGrid (plyr, org, len, rot, value ) {
+
+        for ( var j = 0; j < len; j++ ) {
+
+            var post = ( rot == 0 ) ? org + j : org + (j*10);
+
+            this.playersGridData [ plyr ] [ post ] = value;
+
+        }
+
+    } 
+
+    postCheck ( gridPos, len, isVertical ) {
+
+        //console.log ( gridPos, len, isVertical );
+
+        const r = Math.floor ( gridPos / 10 ), c = gridPos % 10;
+
+        let counter = 0;
+
+        for ( let i = 0; i < len; i++) {
+
+            if ( !isVertical ) {
+
+                if ( c + i < 10 ) {
+                    if ( !this.checkAdjacents ( gridPos + i, this.playersGridData['self'] ))  counter += 1;
+                }
+
+            }else {
+
+                if ( (r + i) < 10 ) {
+                    if ( !this.checkAdjacents ( gridPos + (i*10), this.playersGridData['self'] ) ) counter += 1;
                 }
 
             }
+
         }
 
+        return counter >= len;
 
     }
+
+    getCellHit ( plyr, ship ) {
+
+        for ( let i = 0; i < 100; i++ ) {
+
+            var cell = this.fieldCont.getByName( plyr + '_cell' + i );
+
+            if ( this.cellHit ( cell, ship ) ) return { x: cell.x, y:cell.y, id : i };
+
+        }
+
+        return null;
+
+    }
+
+    cellHit ( cell, ship ) {
+
+        return ( cell.x - cell.width/2) <= ship.x
+            && ( cell.y - cell.height/2) <= ship.y
+            && ( cell.x + cell.width/2) > ship.x
+            && ( cell.y + cell.height/2) > ship.y
+   
+    }  
 
     getRandomFleetPos ( plyr ) 
     {
         
-        //create grid 10 x 10..
         let tmpArr = [];
 
-        //create temp grid..
         let tempGridData = [];
 
         for ( var i = 0; i < 100; i++ ) {
             tempGridData.push (0);
         }
-
-        //
-        let counter = 0;
 
         for ( var i in this.fleetData ) {
 
@@ -137,7 +411,8 @@ class SceneA extends Phaser.Scene {
 
             const len = this.fleetData [i].len;
 
-            do {
+            while ( !gridCheck) 
+            {
 
                 let rndGridPos = Math.floor ( Math.random() * 100 );
 
@@ -147,55 +422,38 @@ class SceneA extends Phaser.Scene {
 
 
                 //check if horizontal or vertical position is good..
-
                 for ( let i = 0; i < len; i++) {
 
-                    //check vertical
-                    if ( (r + i) < 10 ) {
-
-                        let gridPosV = ((r + i) * 10) + c;
-
-                        if ( this.checkNearby ( gridPosV, tempGridData ) ) countV += 1;
-
+                    //horizontal
+                    if ( (c + i) < 10 ) {
+                        if ( !this.checkAdjacents ( rndGridPos + i, tempGridData ) ) countH += 1;
                     }
 
-                    // check horizontal 
-                    if ( (c + i) < 10 ) {
-
-                        let gridPosH = (r * 10) + c + i;
-
-                        if ( this.checkNearby ( gridPosH, tempGridData ) ) countH += 1;
-
-                        //if ( tempGridData [ gridPosH ] == 0 ) countH += 1;
-                        
+                    //vertical
+                    if ( (r + i) < 10 ) {
+                        if ( !this.checkAdjacents ( rndGridPos + (i*10), tempGridData ) ) countV += 1;
                     }
 
                 }
-                
-
+    
                 //
+                //console.log ( rndGridPos, len, countH, countV );
+
                 if ( countH >= len || countV >= len ) {
 
-                    let rot = ( countH >= len ) ? 0 : 1;
+                    let rot = 0;
+
+                    if ( countH >=len && countV >=len) {
+                        rot = Math.floor ( Math.random() * 2 )
+                    }else {
+                        rot = ( countH >= len ) ? 0 :  1;
+                    }
 
                     for ( let i = 0; i < len; i++ ) {
 
-                        if ( rot == 1 ) {
+                        var post = rot == 0 ? rndGridPos + i : rndGridPos + (i*10);
 
-                            //let vrt = ((r + i) * 10) + c;
-
-                            let vrt = rndGridPos + (i * 10);
-
-                            tempGridData [ vrt ] =  1;
-
-                        }else {
-                            
-                            //let hor = (r * 10) + c + i;
-
-                            let hor = rndGridPos + i;
-
-                            tempGridData [ hor ] =  1;
-                        }
+                        tempGridData [ post ] = 1;
 
                     }
 
@@ -205,52 +463,54 @@ class SceneA extends Phaser.Scene {
 
                 }
 
-                console.log ('done here..');
 
+            }
 
-
-            } while ( !gridCheck );
-
-        
         }
 
         return tmpArr;
 
     }
 
-
-    checkNearby ( gridPos, arr ) {
+    checkAdjacents ( gridPos, arr ) {
 
         const r = Math.floor ( gridPos / 10 ), c = gridPos % 10;
 
-        let center = false;
-        if ( arr[gridPos] == 1 ) center = true;
+        var tmp = [];
 
-        let top = false;
-        if ( r - 1 >= 0 ) {
-            if ( arr [ gridPos - 10 ] == 1 ) top = true;
-        }
+        tmp.push ( arr[gridPos] );
 
-        let bot = false;
-        if ( r + 1 < 10 ) {
-            if ( arr [ gridPos + 10 ] == 1 ) bot = true;
-        }
+        if ( r - 1 >= 0 ) tmp.push ( arr[ gridPos - 10 ] );
 
-        let left = false;
-        if ( c - 1 >= 0 ) {
-            if ( arr [ gridPos - 1 ] == 1 ) left = true;
-        }
+        if ( r + 1 < 10 ) tmp.push ( arr[ gridPos + 10 ] );
 
-        let right = false;
-        if ( c + 1 < 10 ) {
-            if ( arr [ gridPos + 1 ] == 1 ) right = true;
-        }
+        if ( c - 1 >= 0 ) tmp.push ( arr[ gridPos - 1 ] );
 
-        return !center && !top && !bot && !left && !right;
+        if ( c + 1 < 10 ) tmp.push ( arr[ gridPos + 1 ] );
 
+        return tmp.includes (1);
 
     }
 
+    getAdjacents ( post) 
+    {   
+        var arr = [];
+
+        var r = Math.floor ( post / 10 ), c = post % 10;
+
+        arr.push (post);
+
+        if ( r - 1 >= 0 ) arr.push ( (r-1)*10 + c );
+
+        if ( c - 1 >= 0 ) arr.push ( r*10 + (c-1) );
+
+        if ( r + 1 < 10 ) arr.push ( (r+1)*10 + c );
+        
+        if ( c + 1 < 10 ) arr.push ( r*10 + (c+1) );
+
+        return arr;
+    }
+    
     update ( time, delta ) {
       
     }
