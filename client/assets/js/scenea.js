@@ -131,9 +131,9 @@ class SceneA extends Phaser.Scene {
 
             var img = this.add.image ( 0, 0, 'pind' );
 
-            var ttxt = this.add.text ( -230, -20, this.playersData[i].username, { color:'#646464', fontFamily:'Oswald', fontSize: 34 }).setOrigin (0, 0.5);
+            var ttxt = this.add.text ( -240, -20, this.playersData[i].username, { color:'#646464', fontFamily:'Oswald', fontSize: 34 }).setOrigin (0, 0.5);
 
-            var wins = this.add.text ( -230, 20, 'Wins: 0', { color:'#9e9e9e', fontFamily:'Oswald', fontSize: 28 }).setOrigin (0, 0.5);
+            var wins = this.add.text ( -240, 20, 'Wins: 0', { color:'#9e9e9e', fontFamily:'Oswald', fontSize: 28 }).setOrigin (0, 0.5);
 
             cont.add ( [img, ttxt, wins ]);
 
@@ -497,9 +497,9 @@ class SceneA extends Phaser.Scene {
 
             var cont = this.add.container ( cell.x, cell.y );
 
-            var rct = this.add.rectangle ( 0, 0, this.cellSize-2 , this.cellSize-2, 0xffffff, 0.2 );
+            var rct = this.add.rectangle ( 0, 0, this.cellSize-1, this.cellSize-1, 0xdedede, 0.6 );
 
-            var crc = this.add.circle ( 0, 0, 15, isHit ? 0xff3333 : 0x6a6a6a, 1 ).setScale (0.5);
+            var crc = this.add.circle ( 0, 0, 10, isHit ? 0xff3333 : 0x6a6a6a, 1 ).setScale (0.5);
 
             this.add.tween ({
                 targets : crc,
@@ -510,8 +510,6 @@ class SceneA extends Phaser.Scene {
             });
 
             cont.add ( [ rct, crc ]);
-
-            this.playersData [ this.turn ].shotsFired.push ({ post : cell.id, result : isHit ? 1 : 0 });
 
             this.endTurn ();
 
@@ -592,20 +590,15 @@ class SceneA extends Phaser.Scene {
         this.startTurn ();
     }
 
-    startTurn ( delay = 1000 )
+    startTurn ()
     {
-
-        this.time.delayedCall ( delay, () => {
-
-            if ( this.playersData [ this.turn ].isAI ) {
-                this.turnAI ();
-            }else {
-                if ( this.turn == 'self' ) this.activateCells ()
+        if ( this.playersData [ this.turn ].isAI ) {
+            this.time.delayedCall ( 500, this.turnAI, [], this);
+        }else {
+            if ( this.turn == 'self' ) {
+                this.time.delayedCall ( 200, this.activateCells, [], this);
             }
-
-        }, [], this);
-
-    
+        }
     }
 
     endTurn ()
@@ -617,34 +610,16 @@ class SceneA extends Phaser.Scene {
 
     turnAI () 
     {
-        
-        var sf = this.playersData[this.turn].shotsFired;
+        var sf = this.playersData[ this.turn ].shotsFired;
 
-        var pick = 0;
+        var indx =  Math.floor(Math.random() * sf.length);
 
-        if ( sf.length == 0 ) {
+        var pick = sf [ indx ];
 
-            pick = Math.floor (Math.random() * 100 );
-
-        }else {
-
-            var prevShot = sf [ sf.length - 1 ];
-
-            if ( prevShot.result == 1 ) {
-
-                var adj = this.getAdjacents ( prevShot.post );
-
-                
-
-            }else {
-
-
-
-            }
-
-        }
+        sf.splice ( indx, 1 );
 
         this.cellPick ( pick );
+
 
 
     }
