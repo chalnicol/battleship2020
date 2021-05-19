@@ -17,7 +17,7 @@ class Cells extends Phaser.GameObjects.Container {
 
         
         this.on('pointerover', function () {
-            img.setTint(0xffffff);
+            img.setTint(0xffff99);
         });
         this.on('pointerout', function () {
             img.clearTint();
@@ -39,14 +39,17 @@ class Cells extends Phaser.GameObjects.Container {
         if ( active ) {
            if ( !this.isClicked ) this.setInteractive ();
         }else {
-            this.removeInteractive ();
+            this.disableInteractive ();
         }
 
         return this;
     }
 
-    setClicked () 
+    clicked () 
     {
+        
+        this.first.clearTint ();
+
         this.isClicked = true;
 
         return this;

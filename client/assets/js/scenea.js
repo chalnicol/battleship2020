@@ -13,8 +13,6 @@ class SceneA extends Phaser.Scene {
     create ()
     {
 
-        this.playerFleetData = {};
-
         this.fleetData = [
             { frm : 0, len:5, type: 'carrier'},
             { frm : 1, len:4, type: 'battleship'},
@@ -24,10 +22,7 @@ class SceneA extends Phaser.Scene {
             { frm : 4, len:2, type: 'destroyer'},
         ];
 
-        this.gameData = {
-            'singlePlayer' : true,
-            'withTimer' : false
-        };
+        this.myGame = { 'singlePlayer' : true, 'withTimer' : false };
 
         this.cellSize = 80;
 
@@ -35,11 +30,17 @@ class SceneA extends Phaser.Scene {
 
         this.fieldCont = this.add.container ( 0, 0 );
 
-        this.turn = 0;
+        this.turn = '';
+
+        this.playersData = {};
+
+        this.gridPostShot = [];
 
         //..
 
         this.showPrompt ('Initializing..');
+
+        this.initPlayers ();
 
         this.createPlayerIndicators ();
 
@@ -48,6 +49,17 @@ class SceneA extends Phaser.Scene {
         this.time.delayedCall ( 1000, this.startPrep, [], this );
 
     }   
+
+    initPlayers ()
+    {
+
+        this.playersData ['self'] = new Player ( 'self', 'Nong', false );
+
+        this.playersData ['oppo'] = new Player ( 'oppo', 'Chalnicol', true );
+
+        this.turn = 'self';
+
+    }
 
     startPrep () 
     {
@@ -69,20 +81,19 @@ class SceneA extends Phaser.Scene {
 
         this.removeControls();
 
-        if ( this.gameData.singlePlayer ) {
+        if ( this.myGame.singlePlayer ) {
 
             for ( var i = 0; i < 6; i++ ) {
                 this.fieldCont.getByName ('self_ship' + i ).removeInteractive().select(false);
             }
 
-            
             this.createFleet ('oppo', false );
 
             this.startCommencement ();
 
-            
         }else {
 
+            //todo..
         }
         
     }
@@ -106,17 +117,30 @@ class SceneA extends Phaser.Scene {
     {
         this.playerIndicators = this.add.container (0, -70);
 
-        var pW = 700, pH = 150, pS = 100;
+        var pW = 700, pS = 100;
 
         var px = (1920 - (2*(pW+pS)-pS))/2 + pW/2,
 
             py = 80;
 
-        for ( var i = 0; i < 2; i++) {
+        var counter = 0;
 
-            var img = this.add.image ( px + i * ( pW + pS), py, 'pind' );
+        for ( var i in this.playersData ) {
 
-            this.playerIndicators.add ( img );
+            var cont = this.add.container ( px + counter * (pW + pS), py ).setName ( i );
+
+            var img = this.add.image ( 0, 0, 'pind' );
+
+            var ttxt = this.add.text ( -230, -20, this.playersData[i].username, { color:'#646464', fontFamily:'Oswald', fontSize: 34 }).setOrigin (0, 0.5);
+
+            var wins = this.add.text ( -230, 20, 'Wins: 0', { color:'#9e9e9e', fontFamily:'Oswald', fontSize: 28 }).setOrigin (0, 0.5);
+
+            cont.add ( [img, ttxt, wins ]);
+
+            this.playerIndicators.add ( cont );
+
+            counter ++;
+
         }
 
         var vs = this.add.image ( 960, 70, 'vs');
@@ -161,16 +185,14 @@ class SceneA extends Phaser.Scene {
 
                 cont.on ('pointerup', function () {
 
-                    this.setClicked().enabled ( false );
-
-                    this.scene.cellClick ( j );
+                    this.scene.cellPick ( this.id );
 
                 });
                 
                 this.fieldCont.add ( cont );
                 
                 //create players grid..
-                this.playersGridData [plyr].push (0);
+                this.playersGridData [plyr].push ( 0 );
 
             }
 
@@ -190,13 +212,19 @@ class SceneA extends Phaser.Scene {
                
                 rndData = rndFleetData [i];
 
+            var arr = [];
+
             for ( var j = 0; j < this.fleetData[i].len; j++ ) {
 
                 var post = ( rndData.rotation == 0 ) ? rndData.gridPos + j : rndData.gridPos + (j*10);
 
                 this.playersGridData [plyr] [ post ] = 1;
 
+                arr.push ( post );
+
             }
+
+            this.playersData [ plyr ].fleet.push ({ 'id': i, 'rot': rndData.rotation, 'hit': 0, 'gridPost': arr });
 
             
             if ( shown ) {
@@ -258,7 +286,7 @@ class SceneA extends Phaser.Scene {
 
         var rct = this.add.rectangle (0, 0, 400, 200, 0xffffff, 0.9 );
 
-        var txt = this.add.text (0, -70, 'Controls', { color:'#6e6e6e', fontFamily:'Oswald', fontSize:20 }).setOrigin(0.5);
+        var txt = this.add.text (0, -75, 'Controls', { color:'#6e6e6e', fontFamily:'Oswald', fontSize:22 }).setOrigin(0.5);
 
         var buts0 = new MyButton ( this, 0, -20, 300, 60, 'but0', '', '', 0, 'Random', 32 );
 
@@ -395,10 +423,22 @@ class SceneA extends Phaser.Scene {
     activateCells ( activated = true )
     {
         for ( var i = 0; i < 100; i++ ) {
-            
-            this.fieldCont.getByName ('oppo_cell' + i ).enabled ( activated );
+            this.fieldCont.getByName ('oppo_cell' + i ).enable ( activated );
+        }
+    }
+
+    getShipHit ( plyr, post )
+    {
+
+        var fleet = this.playersData [plyr].fleet;
+
+        for ( var i in fleet ) {
+
+            if ( fleet[i].gridPost.includes ( post ) ) return i;
 
         }
+
+        return -1;
 
     }
 
@@ -443,17 +483,173 @@ class SceneA extends Phaser.Scene {
 
     }
 
+    cellPick ( cellid ) {
+
+        if ( this.isGameOn ) {
+
+            var opp = this.turn == 'self' ? 'oppo' : 'self';
+
+            var cell = this.fieldCont.getByName ( opp + '_cell' + cellid );
+
+            cell.clicked().enable ( false );
+
+            var isHit = this.playersGridData [ opp ] [ cell.id ] == 1;
+
+            var cont = this.add.container ( cell.x, cell.y );
+
+            var rct = this.add.rectangle ( 0, 0, this.cellSize-2 , this.cellSize-2, 0xffffff, 0.2 );
+
+            var crc = this.add.circle ( 0, 0, 15, isHit ? 0xff3333 : 0x6a6a6a, 1 ).setScale (0.5);
+
+            this.add.tween ({
+                targets : crc,
+                scale : 1,
+                duration : 300,
+                easeParams : [2, 0.6],
+                ease : 'Elastic'
+            });
+
+            cont.add ( [ rct, crc ]);
+
+            this.playersData [ this.turn ].shotsFired.push ({ post : cell.id, result : isHit ? 1 : 0 });
+
+            this.endTurn ();
+
+            if ( isHit ) {
+
+                var shipHit = this.getShipHit ( opp, cell.id );
+
+                var shipData = this.playersData [ opp ].fleet [ shipHit ];
+        
+                shipData.hit += 1;
+
+                if ( shipData.hit >= shipData.gridPost.length ) {
+                
+                    console.log ( 'wreck' );
+                }
+
+                
+                var isWinner = this.checkWin ( this.turn );
+
+                if ( isWinner ) {
+                    this.endGame ( this.turn );
+                }else {
+                    this.startTurn ();
+                }
+
+            }else {
+
+                this.switchTurn ();
+            }
+            
+        }
+
+
+    }
+
+    checkWin ( plyr )
+    {
+
+        var fleet = this.playersData [ plyr == 'self' ? 'oppo' : 'self' ].fleet;
+
+        for ( var i in fleet ) {
+
+            if ( fleet[i].hit < fleet [i].gridPost.length ) return false;
+
+        }
+
+        return true;
+
+    }
+
     startGame ()
     {
-        
+        this.isGameOn = true;
+
+        this.startTurn ();
+
+        if ( this.myGame.withTimer ) {
+            //todo..
+        }
+
+    }
+
+    endGame ( winner )
+    {
+
+        console.log ('winner', winner );
+
+        this.activateCells (false);
+
+        this.isGameOn = false;
+
+    }
+
+    switchTurn ()
+    {
+        this.turn = this.turn == 'self' ? 'oppo' : 'self';
 
         this.startTurn ();
     }
 
-    startTurn ()
+    startTurn ( delay = 1000 )
     {
-        //.
+
+        this.time.delayedCall ( delay, () => {
+
+            if ( this.playersData [ this.turn ].isAI ) {
+                this.turnAI ();
+            }else {
+                if ( this.turn == 'self' ) this.activateCells ()
+            }
+
+        }, [], this);
+
+    
     }
+
+    endTurn ()
+    {
+        if ( this.turn == 'self') {
+            this.activateCells (false);
+        }
+    }
+
+    turnAI () 
+    {
+        
+        var sf = this.playersData[this.turn].shotsFired;
+
+        var pick = 0;
+
+        if ( sf.length == 0 ) {
+
+            pick = Math.floor (Math.random() * 100 );
+
+        }else {
+
+            var prevShot = sf [ sf.length - 1 ];
+
+            if ( prevShot.result == 1 ) {
+
+                var adj = this.getAdjacents ( prevShot.post );
+
+                
+
+            }else {
+
+
+
+            }
+
+        }
+
+        this.cellPick ( pick );
+
+
+    }
+
+   
 
     checkPlayerGrid () {
 
