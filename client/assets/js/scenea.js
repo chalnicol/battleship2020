@@ -13,6 +13,8 @@ class SceneA extends Phaser.Scene {
     create ()
     {
 
+        this.playerFleetData = {};
+
         this.fleetData = [
             { frm : 0, len:5, type: 'carrier'},
             { frm : 1, len:4, type: 'battleship'},
@@ -33,183 +35,286 @@ class SceneA extends Phaser.Scene {
 
         this.fieldCont = this.add.container ( 0, 0 );
 
-        
+        this.turn = 0;
 
-        this.initGridData ();
+        //..
 
-        this.createField ('self');
+        this.showPrompt ('Initializing..');
 
         this.createPlayerIndicators ();
 
-        this.time.delayedCall ( 1000, () => {
+        this.createField ();
 
-            this.createFleet('self', true); 
+        this.time.delayedCall ( 1000, this.startPrep, [], this );
 
-            this.createControls();
-            
-            this.startPrep ();
+    }   
 
-        }, [], this );
+    startPrep () 
+    {
+
+        this.removePrompt ();
+
+        this.createFleet('self'); 
+
+        this.activateDrag ();
+
+        this.createControls();
 
     }
 
-    initGridData ()
+    endPrep ()
     {
-        this.playersGridData = { self : [], oppo : [] };
+        //..
+        console.log ('this');
 
-        for ( var i=0; i < 100; i++ ) {
+        this.removeControls();
 
-            this.playersGridData ['self'].push (0);
+        if ( this.gameData.singlePlayer ) {
 
-            this.playersGridData ['oppo'].push (0);
+            for ( var i = 0; i < 6; i++ ) {
+                this.fieldCont.getByName ('self_ship' + i ).removeInteractive().select(false);
+            }
+
+            
+            this.createFleet ('oppo', false );
+
+            this.startCommencement ();
+
+            
+        }else {
+
         }
+        
+    }
 
+    showPrompt ( txt )
+    {
+        var rct = this.add.rectangle (960, 540, 350, 100, 0x0a0a0a, 0.5 );
+
+        var txt = this.add.text (960, 540, txt, { color:'#fff', fontFamily:'Oswald', fontSize:30 }).setOrigin(0.5);
+
+        this.promptCont = this.add.container (0, 0, [ rct, txt ]);
+
+    }
+
+    removePrompt ()
+    {
+        this.promptCont.destroy ();
     }
 
     createPlayerIndicators ()
     {
-        var pW = 800, pH = 150, pS = 160;
+        this.playerIndicators = this.add.container (0, -70);
+
+        var pW = 700, pH = 150, pS = 100;
 
         var px = (1920 - (2*(pW+pS)-pS))/2 + pW/2,
 
-            py = 75;
+            py = 80;
 
         for ( var i = 0; i < 2; i++) {
 
-            this.add.image ( px + i * ( pW + pS), py, 'pind' );
+            var img = this.add.image ( px + i * ( pW + pS), py, 'pind' );
+
+            this.playerIndicators.add ( img );
+        }
+
+        var vs = this.add.image ( 960, 70, 'vs');
+
+        this.playerIndicators.add ( vs );
+
+        this.add.tween ({
+            targets : this.playerIndicators,
+            y : 0,
+            duration : 400,
+            ease : 'Power3'
+        });
+
+
+    }
+
+    createField ()
+    {
+
+        this.playersGridData = { self : [], oppo : [] };
+
+        var cz = this.cellSize;
+
+        var pW = 800, pS = 50;
+
+        var cx = (1920 - (2*(pW+pS)-pS))/2 + cz/2;
+
+        for ( let i = 0; i < 2; i++ ) {
+
+            var sx = cx + i * ( pW + pS), sy = 190;
+
+            var plyr = i == 0 ? 'self' : 'oppo';
+
+            for ( let j = 0; j < 100; j++ ) {
+
+                let ix = Math.floor ( j/10), iy = j % 10;
+
+                let xp =sx + iy * cz, yp =  sy + ix * cz;
+
+
+                var cont = new Cells (this, xp, yp, j, plyr, cz );
+
+                cont.on ('pointerup', function () {
+
+                    this.setClicked().enabled ( false );
+
+                    this.scene.cellClick ( j );
+
+                });
+                
+                this.fieldCont.add ( cont );
+                
+                //create players grid..
+                this.playersGridData [plyr].push (0);
+
+            }
+
 
         }
 
+    }
+
+    createFleet ( plyr, shown = true )
+    {
+
+        const rndFleetData = this.getRandomFleetData (plyr);
+
+        for ( var i in rndFleetData ) {
+
+            var fleet = this.fleetData [i], 
+               
+                rndData = rndFleetData [i];
+
+            for ( var j = 0; j < this.fleetData[i].len; j++ ) {
+
+                var post = ( rndData.rotation == 0 ) ? rndData.gridPos + j : rndData.gridPos + (j*10);
+
+                this.playersGridData [plyr] [ post ] = 1;
+
+            }
+
+            
+            if ( shown ) {
+
+                var cell = this.fieldCont.getByName ( plyr + '_cell' + rndData.gridPos );
+
+                var ship = new Ship ( this, cell.x, cell.y, plyr, i, rndData.gridPos, rndData.rotation, this.cellSize, fleet.len, fleet.type, fleet.frm, true );
+
+                ship.on ('pointerup', function () {
+
+                    if ( this.lastClickTime == 0 ) {
+
+                        this.lastClickTime = new Date ();
+
+                    }else {
+
+                        var newClick = new Date ();
+
+                        if ( newClick - this.lastClickTime < 300 ) {
+
+                            this.scene.setPlayerGrid ( 'self', this.orgCell, this.len, this.isVertical ? 1 : 0, 0 );
+
+                            var postCheck = this.scene.postCheck ( this.orgCell, this.len, !this.isVertical );
+
+                            if  ( postCheck ) {
+
+                                this.changeOrientation();
+
+                                this.scene.setPlayerGrid ( 'self', this.orgCell, this.len, this.isVertical ? 1 : 0, 1 );
+
+                                //this.scene.checkPlayerGrid ();
+
+                            }else {
+                                console.log ('err');
+                            }
+                            
+                        }
+
+                        this.lastClickTime = newClick
+                    }
+
+                });
+                
+                this.fieldCont.add ( ship );
+
+                this.input.setDraggable ( ship );
+
+            }
+
+        }
 
     }
 
     createControls ()
     {
         //..
-        var _this = this;
 
-        var buts = new MyButton ( this, 480, 1015, 800, 80, 'but0', '', '', 0, 'Ready', 40 );
+        // x = 1410, y = 554
 
-        buts.on('pointerup', function () {
+        var rct = this.add.rectangle (0, 0, 400, 200, 0xffffff, 0.9 );
 
-            this.removeInteractive ();
+        var txt = this.add.text (0, -70, 'Controls', { color:'#6e6e6e', fontFamily:'Oswald', fontSize:20 }).setOrigin(0.5);
 
-            _this.add.tween ({
-                targets : this,
-                y : 1130,
-                duration : 200,
-                ease : 'Power2',
-                onComplete : () => {
-                    this.destroy ();
-                }
-            });
+        var buts0 = new MyButton ( this, 0, -20, 300, 60, 'but0', '', '', 0, 'Random', 32 );
 
-            _this.endPrep ();
+        buts0.on('pointerup', () => {
 
+            this.randomFleet ();
+
+        });
+
+        var buts1 = new MyButton ( this, 0, 50, 300, 60, 'but1', '', '', 0, 'Ready', 32 );
+
+        buts1.on('pointerup', () => {
+
+            this.endPrep ();
+        });
+
+        this.controlsCont = this.add.container (1385, 1180, [ rct, txt, buts0, buts1 ] );
+
+        this.add.tween ({
+            targets : this.controlsCont,
+            y : 554,
+            duration : 200,
+            ease : 'Power2'
+        });
+
+
+    }
+
+    removeControls () 
+    {
+
+        this.add.tween ({
+            targets : this.controlsCont,
+            y : 1180,
+            duration : 200,
+            ease : 'Power2',
+            onComplete : () => {
+                this.controlsCont.destroy ();
+            }
         });
     }
 
-    createField ( plyr )
-    {
-
-        var cz = this.cellSize;
-
-        const cx = plyr == 'self' ? (960 - (cz*10))/2 + cz/2 : 960 + (960 - (cz*10))/2 + cz/2,
-        
-              cy = 190;
-
-        for ( var j = 0; j < 100; j++ ) {
-
-            let ix = Math.floor ( j/10), iy = j % 10;
-
-            let minicont = this.add.container (  cx + iy * cz, cy + ix * cz ).setSize(cz, cz).setName ( plyr + '_cell'+ j);
-
-            let rct = this.add.rectangle ( 0, 0, cz, cz, 0xdedede, 1 ).setStrokeStyle ( 2, 0x9e9e9e );
-
-            let txt = this.add.text ( -30, -30, j + 1, { fontSize: 16, fontFamily:'Oswald', color:'#888' });
-            
-            minicont.add([rct, txt]);
-
-            this.fieldCont.add ( minicont );
-
-        }
-
-       
-
-    }
-
-    createFleet ( plyr, enabled = false )
-    {
-
-        const fleetPos = this.getRandomFleetPos (plyr);
-
-        for ( var i in fleetPos ) {
-
-            let cell = this.fieldCont.getByName ( plyr + '_cell' + fleetPos [i].gridPos );
-
-            let ship = new Ship ( this, cell.x, cell.y, plyr, i, fleetPos[i].gridPos, fleetPos [i].rotation, this.cellSize, this.fleetData[i], enabled );
-
-            ship.on ('pointerup', function () {
-
-                if ( this.lastClickTime == 0 ) {
-
-                    this.lastClickTime = new Date ();
-
-                }else {
-
-                    var newClick = new Date ();
-
-                    if ( newClick - this.lastClickTime < 300 ) {
-
-                        this.scene.setPlayerGrid ( 'self', this.orgCell, this.len, this.isVertical ? 1 : 0, 0 );
-
-                        var postCheck = this.scene.postCheck ( this.orgCell, this.len, !this.isVertical );
-
-                        if  ( postCheck ) {
-
-                            this.changeOrientation();
-
-                            this.scene.setPlayerGrid ( 'self', this.orgCell, this.len, this.isVertical ? 1 : 0, 1 );
-
-                            //this.scene.checkPlayerGrid ();
-
-                        }else {
-                            console.log ('err');
-                        }
-                         
-                    }
-
-                    this.lastClickTime = newClick
-                }
-
-            });
-            
-            for ( var j = 0; j < this.fleetData[i].len; j++ ) {
-
-                var post = ( fleetPos [i].rotation == 0 ) ? fleetPos [i].gridPos + j : fleetPos [i].gridPos + (j*10);
-
-                this.playersGridData ['self'] [ post ] = 1;
-
-            }
-
-            this.fieldCont.add ( ship );
-
-        }
-
-    }
-
-    startPrep ()
+    randomFleet ()
     {
         for ( var i = 0; i < 6; i++ ) {
-
-            var ship = this.fieldCont.getByName ('self_ship' + i );
-
-            ship.select (true);
-
-            this.input.setDraggable(ship);
-
+            this.fieldCont.getByName ('self_ship' + i ).destroy();
         }
+        for ( var i = 0; i < 100; i++ ) {
+            this.playersGridData ['self'] [i] = 0;
+        }
+        this.createFleet ('self');
+    }
 
+    activateDrag ()
+    {
+        
         this.input.on('dragstart', function (pointer, gameObject) {
 
             if ( gameObject.isSelected ) {
@@ -287,35 +392,65 @@ class SceneA extends Phaser.Scene {
 
     }
 
-    endPrep ()
+    activateCells ( activated = true )
     {
-        //..
-        console.log ('this');
-
-        if ( this.gameData.singlePlayer ) {
-
-            for ( var i = 0; i < 6; i++ ) {
-                this.fieldCont.getByName ('self_ship' + i ).removeInteractive().select(false);
-            }
-
-            this.time.delayedCall ( 200, () => {
-
-                this.createField ('oppo');
-
-                this.createFleet ('oppo');
-
-                this.startCommence ();
-
-            }, [], this );
+        for ( var i = 0; i < 100; i++ ) {
             
-        }else {
+            this.fieldCont.getByName ('oppo_cell' + i ).enabled ( activated );
 
         }
 
-        
     }
 
-    startCommence ()
+    startCommencement ()
+    {
+        this.showCommenceScreen ();
+    }
+
+    showCommenceScreen () 
+    {
+        var rct = this.add.rectangle (960, 540, 400, 100, 0x0a0a0a, 0.5 );
+
+        var txt = this.add.text (960, 540, 'Game starts in 3..', { color:'#fff', fontFamily:'Oswald', fontSize:30 }).setOrigin(0.5);
+
+            
+        var counter = 0;
+
+        var myTimer = setInterval (() => {
+
+            counter++;
+            console.log ( counter );
+
+            txt.text = 'Game starts in ' + ( 3 - counter ) + '..';
+
+            if ( counter >= 3 ) {
+
+                clearInterval (myTimer);
+
+                this.endCommencement ();
+            }
+
+        }, 1000 )
+
+        this.commenceScreenCont = this.add.container (0, 0, [ rct, txt ]);
+    }
+
+    endCommencement ()
+    {
+        this.commenceScreenCont.destroy ();
+
+        this.startGame ();
+
+    }
+
+    startGame ()
+    {
+        
+
+        this.startTurn ();
+    }
+
+    startTurn ()
     {
         //.
     }
@@ -335,8 +470,9 @@ class SceneA extends Phaser.Scene {
 
             var post = ( rot == 0 ) ? org + j : org + (j*10);
 
-            this.playersGridData [ plyr ] [ post ] = value;
+            this.playersGridData [plyr] [ post ] = value;
 
+            //console.log ( this.playersGridData [plyr] [ post ] )
         }
 
     } 
@@ -394,7 +530,7 @@ class SceneA extends Phaser.Scene {
    
     }  
 
-    getRandomFleetPos ( plyr ) 
+    getRandomFleetData ( plyr ) 
     {
         
         let tmpArr = [];

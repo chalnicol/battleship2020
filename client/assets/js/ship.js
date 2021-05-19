@@ -1,6 +1,6 @@
 class Ship extends Phaser.GameObjects.Container {
 
-    constructor(scene, x, y, plyr, idnmbr, orgCell, rot, csize, attr = {}, enabled ) {
+    constructor(scene, x, y, plyr, id, orgCell, rot, csize, len, type, frame, enabled ) {
 
         //frame, type, len
         super(scene, x, y, [] );
@@ -8,11 +8,11 @@ class Ship extends Phaser.GameObjects.Container {
         
         this.orgCell = orgCell;
 
-        this.len = attr.len;
+        this.len = len;
         
-        this.id = plyr + '_ship' + idnmbr;
+        this.id = id;
         
-        this.type = attr.type;
+        this.type = type;
 
         this.origin = {};
 
@@ -20,21 +20,21 @@ class Ship extends Phaser.GameObjects.Container {
 
         this.isVertical = false;
 
-        this.isSelected = false;
+        this.isSelected = true;
 
         //..
-        var w = csize * attr.len, h = csize;
+        var w = csize * len, h = csize;
 
-        this.setName ( this.id );
+        this.setName ( plyr + '_ship' + id );
         
         if ( enabled ) this.setInteractive ( new Phaser.Geom.Rectangle( -csize/2, -csize/2, w, h ), Phaser.Geom.Rectangle.Contains );
 
         //..
-        let rct = scene.add.rectangle ( -csize/2, -csize/2, w, h, 0xffffff, 0.5 ).setOrigin (0).setVisible (false);
+        let rct = scene.add.rectangle ( -csize/2, -csize/2, w, h, 0x99ff99, 0.5 ).setOrigin (0);
 
-        let ship = scene.add.image ( -csize/2, 0, 'fleet', attr.frm ).setOrigin ( 0, 0.5 ).setScale ( csize/80 );
+        let ship = scene.add.image ( -csize/2, 0, 'fleet', frame ).setOrigin ( 0, 0.5 ).setScale ( csize/80 );
 
-        let txt = scene.add.text ( 20, 0, attr.type, { color:'#6e6e6e', fontSize:20, fontFamily : 'Oswald'}).setOrigin(0.5);
+        let txt = scene.add.text ( 20, 0, type, { color:'#6e6e6e', fontSize:20, fontFamily : 'Oswald'}).setOrigin(0.5);
 
         this.add ([rct, ship, txt]);
 
@@ -47,19 +47,7 @@ class Ship extends Phaser.GameObjects.Container {
     }
 
 
-    select ( selected = true )
-    {
-        this.isSelected = selected;
-
-        if ( this.isSelected ) {
-
-            this.first.setStrokeStyle ( 2, 0xff0000 );
-
-        }else {
-            this.first.setStrokeStyle (0);
-
-        }
-    }
+ 
     changeOrientation ()
     {
 
