@@ -449,11 +449,10 @@ class SceneA extends Phaser.Scene {
 
     showCommenceScreen () 
     {
-        var rct = this.add.rectangle (960, 540, 400, 100, 0x0a0a0a, 0.5 );
+        var rct = this.add.rectangle (960, 540, 350, 100, 0x0a0a0a, 0.5 );
 
         var txt = this.add.text (960, 540, 'Game starts in 3..', { color:'#fff', fontFamily:'Oswald', fontSize:30 }).setOrigin(0.5);
 
-            
         var counter = 0;
 
         var myTimer = setInterval (() => {
@@ -495,21 +494,8 @@ class SceneA extends Phaser.Scene {
 
             var isHit = this.playersGridData [ opp ] [ cell.id ] == 1;
 
-            var cont = this.add.container ( cell.x, cell.y );
-
-            var rct = this.add.rectangle ( 0, 0, this.cellSize-1, this.cellSize-1, 0xdedede, 0.6 );
-
-            var crc = this.add.circle ( 0, 0, 10, isHit ? 0xff3333 : 0x6a6a6a, 1 ).setScale (0.5);
-
-            this.add.tween ({
-                targets : crc,
-                scale : 1,
-                duration : 300,
-                easeParams : [2, 0.6],
-                ease : 'Elastic'
-            });
-
-            cont.add ( [ rct, crc ]);
+            this.createAnims ( cell.x, cell.y, isHit );
+            //..
 
             this.endTurn ();
 
@@ -522,11 +508,9 @@ class SceneA extends Phaser.Scene {
                 shipData.hit += 1;
 
                 if ( shipData.hit >= shipData.gridPost.length ) {
-                
                     console.log ( 'wreck' );
                 }
 
-                
                 var isWinner = this.checkWin ( this.turn );
 
                 if ( isWinner ) {
@@ -540,6 +524,78 @@ class SceneA extends Phaser.Scene {
                 this.switchTurn ();
             }
             
+        }
+
+
+    }
+
+    createAnims ( x, y, isHit )
+    {
+
+        var cont = this.add.container ( x, y );
+
+        var rct = this.add.rectangle ( 0, 0, this.cellSize-1, this.cellSize-1, isHit ? 0xffffcc : 0xdedede, 0.6 );
+
+        var crc = this.add.circle ( 0, 0, 10, isHit ? 0xff3333 : 0x6a6a6a, 1 ).setScale (0.5);
+
+        this.add.tween ({
+            targets : crc,
+            scale : 1,
+            duration : 300,
+            easeParams : [2, 0.6],
+            ease : 'Elastic'
+        });
+
+        cont.add ( [ rct, crc ]);
+
+        if ( !isHit ) {
+
+            for ( var i = 0; i < 3; i++ ) {
+
+                let crca = this.add.circle ( x, y, 50 ).setStrokeStyle ( 1, 0x3a3a3a ).setScale (0.2);
+
+                this.add.tween ({
+                    targets : crca,
+                    scale : 1, 
+                    alpha : 0,
+                    duration : 1000,
+                    ease : 'Power3',
+                    delay : i * 150,
+                    onComplete : function () {
+                        this.targets[0].destroy()
+                    }
+                });
+
+            }
+
+        }else {
+
+            var max = 10;
+
+            for ( var i = 0; i < max; i++ ) {
+
+                var xp = x + Math.cos ( Phaser.Math.DegToRad( 360/max * i )) * 10,
+
+                    yp = y - Math.sin ( Phaser.Math.DegToRad( 360/max * i )) * 10;
+
+                
+                let str = this.add.star ( xp, yp, 5, 5, 10, 0xff3333, 1 );
+
+                this.add.tween ({
+                    targets : str,
+                    x :  x + Math.cos ( Phaser.Math.DegToRad( 360/max * i )) * 80,
+                    y :  y - Math.sin ( Phaser.Math.DegToRad( 360/max * i )) * 80,
+                    alpha : 0,
+                    duration : 1000,
+                    ease : 'Power2',
+                    onComplete : function () {
+                        this.targets[0].destroy()
+                    }
+                });
+
+            }
+
+
         }
 
 
@@ -620,11 +676,7 @@ class SceneA extends Phaser.Scene {
 
         this.cellPick ( pick );
 
-
-
     }
-
-   
 
     checkPlayerGrid () {
 
