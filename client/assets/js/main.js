@@ -1,7 +1,10 @@
 
+
+var socket;
+
 window.onload = function () {
-  
-    const config = {
+
+    var config = {
         type: Phaser.AUTO,
         scale: {
             mode: Phaser.Scale.FIT,
@@ -10,10 +13,22 @@ window.onload = function () {
             width: 1920,
             height: 1080
         },
-        backgroundColor: '#f3f3f3',
-        scene: [ Preloader, SceneA ]
+        audio: {
+            disableWebAudio: false
+        },
+        backgroundColor: '#ffffff',
+        scene: [ Preloader, Intro, SceneA ]
     };
 
     new Phaser.Game(config);
+
+     //connect to socket
+
+    let myUsername = 'Guest' + Math.floor (Math.random() * 9999);
+
+    socket = io();
+
+    socket.emit ('initUser', { 'username' : myUsername });
+
 
 } 

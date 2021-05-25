@@ -17,14 +17,35 @@ class Preloader extends Phaser.Scene {
 
         this.load.audio ('sceneabg', ['client/assets/sfx/starcommander.ogg', 'client/assets/sfx/starcommander.mp3'] );
 
-      
+        this.load.image('bg', 'client/assets/images/bg.jpg');
+
         this.load.image('pind', 'client/assets/images/playerindicator.png');
 
         this.load.image('clickhere', 'client/assets/images/clickhere.png');
 
+        this.load.image('pair_bg', 'client/assets/images/pair_bg.png');
+
+        this.load.image('prompt', 'client/assets/images/prompt.png');
+
+        this.load.image('prompt_main', 'client/assets/images/prompt_main.png');
+        
+        this.load.image('prompt_sm', 'client/assets/images/prompt_sm.png');
+
+        this.load.image('prompt_xl', 'client/assets/images/prompt_xl.png');
+
         this.load.image('vs', 'client/assets/images/versus.png');
 
         this.load.image('cell', 'client/assets/images/cell.png');
+
+        this.load.image('title', 'client/assets/images/title.png');
+
+        this.load.image('profile', 'client/assets/images/profile.png');
+
+        this.load.image('menu', 'client/assets/images/menu.png');
+
+        this.load.spritesheet('promptbtns', 'client/assets/images/promptbtns.png', { frameWidth: 200, frameHeight: 90 });
+        
+        this.load.spritesheet('pair_btns', 'client/assets/images/pair_btns.png', { frameWidth: 160, frameHeight: 110 });
 
         this.load.spritesheet('fleet', 'client/assets/images/fleet.png', { frameWidth: 400, frameHeight: 90 });
 
@@ -82,7 +103,7 @@ class Preloader extends Phaser.Scene {
         });
         img.once ('pointerup', () => {
             img.removeInteractive ();
-            this.scene.start('SceneA');
+            this.scene.start('Intro');
         });
 
     }

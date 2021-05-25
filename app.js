@@ -1,8 +1,3 @@
-//app.js
-
-var app = require('express')();
-var http = require('http').Server(app);
-var io = require('socket.io')(http);
 
 var express = require('express');
 var app = express();
@@ -22,686 +17,1245 @@ console.log("Server started.");
 var socketList = {};
 var playerList = {};
 var roomList = {};
+var inviteList = {};
 
-var playerCount = 0;
-var updateCount = 0; 
 
-//Player..
-Player = function (id, username){
-	
-	var plyr  = {
-		
-		id:id,
-		username:username,
-		roomid : '',
-		strikeCount : 0,
-		winCount : 0,
-		gamePoints : 0,
-		isReady:false,
-		isInsideRoom : false,
-		isPlaying : false,
-		isPlayingOnePlayer : false,
-		isRequestingRematch : false,
-		plyrIndex : -1,
-		grid : [],
-		fleet  : []
-	
+class Piece {
+
+	constructor ( id, player, post, rank ) {
+
+		this.id = id;
+
+		this.post = post;
+
+		this.rank = rank;
+
+		this.player = player;
+
+		this.isCaptured = false;
+
 	}
 
-	plyr.score = function () {
-		
-		plyr.gamePoints += 1;
-	}
+	isHome () {
 
-	plyr.resetData = function () {
-		//..
-	}
+		const r = Math.floor ( this.post/9 );
 
-	return plyr;
+		//console.log ( 'row', r );
+
+		return ( this.player == 0 && r == 0 ) || ( this.player == 1 && r == 7 );
+
+	}
 
 }
 
-//Rooms..
-GameRoom = function ( id, isTimed=false ) {
-	
-	var rm = {
+class Player {
 
-		id : id,
-		prepLimit : 15,
-		turnLimit : 10,
-		turn : 0,
-		counter : 0,
-		isWinner : '',
-		playerIDs : [],
-		playerCount : 0,
-		clickedPost : -1,
-		isHit : false,
-		isTimed : isTimed,
-		isGameOn : false,
-		timer : null
+	constructor (id, username) {
+		
+		this.id = id;
+
+		this.username = username;
+
+		this.pairingId = Math.floor ( Math.random() * 99999 );
+
+		this.roomId = '';
+
+		this.roomIndex = 0;
+
+		this.chip = 0;
+
+		this.inviteId = '';
+
+		this.isReady = false;
+
+		this.hasOfferedDraw = false;
 
 	}
 
-	rm.startPrepTimer = function () {
+	rematch () {
 
-		rm.counter = 0;
-		rm.timer.setInterval(() => {
+		this.isReady = false;
+
+		this.hasOfferedDraw = false;
+
+	}
+
+	reset () 
+	{
+
+		this.roomId = '';
+
+		this.roomIndex = 0;
+
+		this.chip = 0;
+
+		this.inviteId = '';
+
+	}
+
+}
+
+class GameRoom {
+
+	constructor ( id, type, prepTime = 10, turnTime = 10 ) {
 		
-			if ( rm.counter >= rm.prepLimit ) {
-				clearInterval ( rm.timer );
+		this.id = id;
+
+		this.gameType = type; // 0 = no Timer ; 1 = with timer,
+
+		this.turn = 0;
+
+		this.isClosed = false;
+		
+		this.gridData = [];
+
+		this.pieces = {};
+
+		this.players = [];
+
+		this.isGameOn = false;
+
+		this.prepCount = 0;
+
+		this.readyCount = 0;
+
+		this.startCount = 0;
+
+		this.toRematch = 0;
+
+		this.prepTime = prepTime;
+
+		this.turnTime = turnTime;
+
+		this.prevTurn = 0;
+
+		this.timerCounter = 0;
+
+		this.pieceToMove = '';
+
+		this.timerPaused = false;
+		//
+
+	}
+
+	initGame () {
+
+		this.pieces = {};
+
+		this.gridData = [];
+
+		for ( let i = 0; i < 72; i++ ) {
+
+			this.gridData.push ({ resident : 0, residentPiece : '' });
+
+		}
+
+	}
+
+	startPrep () {
+
+		if ( this.gameType == 1 ) this.starTimer ( this.prepTime, 0 );
+
+	}
+
+	endPrep () {
+
+		for ( var i in this.players) {
+
+			if ( !playerList [ this.players[i] ].isReady ) {
+				
+				socketList [ this.players [i] ].emit ('endPrepTime');
 			}
-			counter++;
 
-		},1000);
+		}
 
 	}
 
-	rm.startBlitzTimer = function () {
+	startCommencement () {
 
-		rm.counter = 0;
-		rm.timer.setInterval(() => {
-		
-			if ( rm.counter >= rm.turnLimit ) {
-				clearInterval ( rm.timer );
+		if ( this.timeIsTicking ) this.stopTimer ();
+
+		for ( var i in this.players ) {
+
+			let oppoPiecesArr = [];
+
+			for ( var j in this.pieces ) {
+
+				if ( this.pieces [j].player != i ) {
+
+					const mirrorPost = i == 0 ? this.pieces[j].post : 71 - this.pieces[j].post;
+
+					oppoPiecesArr.push ( { 'post' : mirrorPost, 'rank' : this.pieces[j].rank  });
+
+				}
+				
 			}
-			counter++;
 
-		},1000);
+			socketList [ this.players [i] ].emit ('commenceGame', { 'oppoPiece' : oppoPiecesArr });
+
+		}
+
+		// setTimeout ( ()=> {
+		// 	this.startGame ();
+		// }, 3000 );
 
 	}
-	
-	rm.stopTimer = function () {
+
+	startGame () {
+
+		this.isGameOn = true;
+
+		this.startTurn ();
+	}
+
+	startTurn () {
 		
-		clearInterval( rm.timer );
+		this.timerCounter = 0;
 
-		rm.counter = 0;
-	}
-	
-	rm.startPreparations = function () {
-		//..
-		if ( rm.isTimed ) rm.startPrepTimer();
-		
-	}
-
-	rm.startGame  = function () {
-		//..
-		rm.isGameOn = true;
-
-		//if ( rm.isTimed ) rm.startBlitzTimer();
-	}
-
-	rm.endGame = function () {
-		//..
-	}
-
-	rm.stopGame = function () {
-		//..
-		rm.isGameOn = false;
-	}
-
-	rm.resetGame = function () {
-		//..
-	}
-
-	rm.switchTurn = function () {
-
-		rm.turn = rm.turn == 0 ? 1 : 0;
+		if ( this.gameType == 1 ) this.starTimer ( this.turnTime, 1 );
 
 	}
 
-	return rm;
-	
+	endTurn ()
+	{
+		for ( var i in this.players) {
+
+			socketList [ this.players [i] ].emit ('endTurn');
+		}
+
+		this.switchTurn ();
+
+	}
+
+	starTimer ( time, phase ) {  
+
+		this.timeIsTicking = true;
+
+		this.myTimer = setInterval (() => {
+
+			if ( !this.timerPaused ) {
+
+				this.timerCounter += 1;
+
+				if ( this.timerCounter >= time ) {
+
+					this.stopTimer();
+
+					if ( phase == 0 ) {
+						this.endPrep();
+					}else {
+						this.endTurn ();
+					}
+
+				}
+			}
+
+		}, 1000 );
+
+
+	}
+
+	toggleTimer ()
+	{
+		this.timerPaused = !this.timerPaused;
+	}
+
+	stopTimer () {
+
+		this.timerPaused = false;
+
+		this.timeIsTicking = false;
+
+		clearInterval ( this.myTimer );
+
+	}
+
+	endGame ( winner ) {
+
+		this.isGameOn = false;
+
+		if ( this.timeIsTicking ) this.stopTimer();
+
+
+	}
+
+	switchTurn () {
+
+		if ( this.timeIsTicking ) this.stopTimer ();
+
+		this.pieceToMove = '';
+
+		this.turn = this.turn == 1 ? 0 : 1;
+
+		this.startTurn ();
+
+	}
+
+	switchPieces () {
+
+		this.prevTurn = this.prevTurn == 0 ? 1 : 0;
+
+		this.turn = this.prevTurn;
+
+	}
+
+	restartGame () {
+
+		this.prepCount = 0;
+
+		this.toRematch = 0;
+
+		this.startCount = 0;
+
+		this.readyCount = 0;
+
+		this.switchPieces ();
+
+		this.initGame ();
+
+	}
+
+}
+
+class Invite {
+
+	constructor ( id, hostId, friendId, gameType=0 ) {
+
+		this.id = id;
+
+		this.hostId = hostId;
+
+		this.friendId = friendId;
+
+		this.gameType = gameType;
+
+		this.pairTimer = null;
+
+		this.startPairTimer ();
+
+	}
+
+	forceStop () {
+
+		if ( playerList.hasOwnProperty ( this.hostId ) ) {
+
+			playerList [ this.hostId ].inviteId = '';
+
+			socketList [ this.hostId ].emit ('pairingError', {'errorMsg': 'Something went wrong.'})
+		}
+
+		if ( playerList.hasOwnProperty ( this.friendId ) ) {
+
+			playerList [ this.friendId ].inviteId = '';
+
+			socketList [ this.friendId ].emit ('pairingError', {'errorMsg': 'Something went wrong.'})
+
+		}
+
+		this.stopPairTimer ();
+
+		this.remove ();
+
+	}
+
+	startPairTimer () {
+
+		this.pairTimer = setTimeout(() => {
+
+			if ( playerList.hasOwnProperty ( this.hostId ) ) {
+
+				playerList [ this.hostId ].inviteId = '';
+
+				socketList [ this.hostId ].emit ('pairingError', {'errorMsg': 'Friend is taking too long to respond.'})
+			}
+
+			if ( playerList.hasOwnProperty ( this.friendId ) ) {
+
+				playerList [ this.friendId ].inviteId = '';
+
+				socketList [ this.friendId ].emit ('pairingError', {'errorMsg': 'Invite Cancelled.'})
+
+			}
+
+			this.remove ();
+			
+		}, 10000);
+
+	}
+
+	stopPairTimer () {
+
+		clearTimeout ( this.pairTimer );
+
+		//console.log ( '-> Invite list timer cleared..', this.id );
+
+	}
+
+	remove ( ) {
+
+		delete inviteList [ this.id ];
+
+		//console.log ( '-> invite list deleted..', this.id );
+
+	}
+
 }
 
 io.on('connection', function(socket){
 	
 	socketList[socket.id] = socket;
 	
-	socket.on("initUser", function (data) {
+	socket.on("initUser",  (data) => {
 		
-		var newPlayer = Player ( socket.id, data );
+		//console.log ( '-> new player connected: ', data.username );
+		
+		let newPlyr = new Player ( socket.id, data.username );
 
-		playerList [ socket.id ] = newPlayer;
+		playerList [ socket.id ] = newPlyr;	
 
-		console.log ( '\n --> ' + newPlayer.username  + ' has entered the game.' );
+		socket.broadcast.emit ('playersOnline', { 'playersCount' :  Object.keys(socketList).length  });
+
+	});
+
+	socket.on ('getInitData', () => {
+		
+		const plyr = playerList [ socket.id ];
+
+		socket.emit ('initDataSent', { 'username': plyr.username, 'pairingId': plyr.pairingId, 'playersCount' : Object.keys(socketList).length });
 		
 	});
-	
-	socket.on("enterGame", function (data) {
-	
-		if ( data.isSinglePlayer ) {
 
-			var newRoom = GameRoom ( socket.id, data );
+	socket.on("enterGame", (data) => {
+	
+		let plyr = playerList [ socket.id ];
+
+		if ( data.game == 0 ) {
+
+			//single player..
+
+			const playerPiece = Math.floor (Math.random() * 2);
+
+			//..
+			let roomId = plyr.username + '_' + Date.now();
+
+			let newRoom = new GameRoom ( roomId, data.gameType );
 				
-			newRoom.playerIDs.push ( socket.id )
+			newRoom.players.push ( socket.id );
 
-			roomList [ socket.id ] = newRoom;
+			newRoom.isClosed = true;
 
-			var player = playerList [ socket.id ];
+			newRoom.turn = playerPiece;
 
-			player.roomid = socket.id;
+			roomList [ roomId ] = newRoom;
 
-			var data = {
-			
-				'isSinglePlayer' : true,
+			plyr.roomId = roomId;
+		
+			const gameRoomData  = {
+
+				'game' : {
+					'multiplayer' : 0,
+					'timerOn' : data.gameType,
+					'time' : { 'prep' : newRoom.prepTime, 'turn' : newRoom.turnTime }
+				},
+				'turn' : playerPiece == 0 ? 'self' : 'oppo',
 				'players' : {
-					'self' : player.username,
+					'self' : { 'username' : plyr.username, 'chip' : playerPiece }
 				}
-	
-			};
 
-			socket.emit ('initGame', data );
+			};	
 
+			//console.log ( '-> '+ plyr.username +' created a room :', roomId );
+
+			socket.emit ('initGame', gameRoomData ); 
 
 		}else {
-	
-			var availableRoom = getAvailableRoom();
 
-			console.log ('\n --> avail room',  availableRoom );
+			//vs game
+			const availableRoom = getAvailableRoom( data.gameType ) ;
 
-			if ( availableRoom == null ) {
+			if ( availableRoom == '' ) {
 
-				var newRoom = GameRoom ( socket.id, data );
+				let roomId = plyr.username + '_' + Date.now();
 				
-				newRoom.playerIDs.push ( socket.id );
-
-				newRoom.playerCount += 1;
-
-				roomList [ socket.id ] = newRoom;
-
-				var player = playerList [ socket.id ];
-
-				player.roomid = socket.id;
-
+				let newRoom = new GameRoom ( roomId, data.gameType );
 				
-				socket.emit ('waitingGame', {} );
+				newRoom.players.push ( socket.id );
 
-				console.log ( '\n --> Room Created :', newRoom.id );
+				roomList [ roomId ] = newRoom;
+
+				plyr.roomId = roomId;
+
+				//console.log ( '-> '+ plyr.username +' created a room :', roomId );
 
 			}else  {
 				
-				var player = playerList [ socket.id ];
+				plyr.roomId = availableRoom;
 
-				player.roomid = availableRoom;
+				plyr.roomIndex = 1;
 
-				var gameRoom = roomList [ availableRoom ];
+				plyr.chip = 1;
 
-				gameRoom.playerIDs.push ( socket.id );
+				let gameRoom = roomList [ availableRoom ];
 
-				gameRoom.playerCount += 1;
+				gameRoom.players.push ( socket.id );
 
+				gameRoom.isClosed = true;
+
+				//console.log ( '-> '+ plyr.username +' joined the room :', gameRoom.id );
+				
 				//initialize game..
-				initGame ( gameRoom.playerIDs );
+				initGame ( gameRoom.id );
 		
 			}
 
 		}
-
-			
+		
 	});
 
-	socket.on("playerReady", function (data) {
-		
-		var player = playerList [socket.id];
-		
-		initGridData ( socket.id, data );
+	socket.on('cancelPairing', () => {
 
-		console.log ( '\n ...  data sent by ' + player.username );
-		
-		var checker = checkPlayersAreReady ( player.roomid );
+		let plyr = playerList [ socket.id ];
 
-		if ( checker ) {
+		leaveRoom ( plyr.id );
+
+	});
+
+	socket.on("pair", (data) => {
+
+		let host = playerList [socket.id];
+
+		let friendId = getPaired ( data.pairingId, socket.id );
+
+		if ( friendId != '' ) {
+
+			let friend = playerList [ friendId ];
 			
-			sendGameData ( player.roomid );
+			if ( friend.roomId == '' && friend.inviteId == '' ) {
 
-			startGame ( player.roomid );
+				let inviteId = 'party_' + Date.now() + '_' + Math.floor ( Math.random() * 99999 );
+
+				let newInvite = new Invite ( inviteId, host.id, friend.id, data.gameType )
+
+				inviteList [ inviteId ] = newInvite;
+
+				//
+				host.inviteId = inviteId;
+
+				//
+				friend.inviteId = inviteId;
+
+				//
+				socketList [ friendId ].emit ('pairInvite', { 'inviteId' : inviteId, 'gameType' : data.gameType, 'username' : host.username });
+
+			}else {
+
+				socket.emit ('pairingError', { 'errorMsg' : 'Friend is not available right now.' } );
+
+			}
+
+		} else {
+
+			socket.emit ('pairingError', { 'errorMsg' : 'Pairing ID submitted does not exist.' } );
 
 		}
-		
+
+	});
+
+	socket.on("pairingResponse", ( data ) => {
+
+		var player = playerList [socket.id];
+
+		if ( inviteList.hasOwnProperty ( data.inviteId ) ) {
+
+			let invite = inviteList [ data.inviteId ];
+
+			invite.stopPairTimer();
+
+			//host..
+			let host = playerList [ invite.hostId ];
+
+			host.inviteId = '';
+			
+			//friend..
+			let friend = playerList [ invite.friendId ];
+
+			friend.inviteId = '';
+
+			//..
+			if ( data.response == 0 ) {
+
+				socketList [ invite.hostId ].emit ('pairingError', { 'errorMsg' : 'Friend is not available right now.'  } );
+
+				delete inviteList [ data.inviteId ];
+
+			}else {
+
+				let roomId =  playerList[ invite.hostId ].username + '_' + Date.now();
+
+				var newRoom = new GameRoom ( roomId, invite.gameType );
+
+				newRoom.players = [ invite.hostId, invite.friendId ];
+
+				newRoom.isClosed = true;
+
+				roomList [ roomId ] = newRoom;
+
+				//..
+				host.roomId = roomId;
+
+				//..
+				friend.roomId = roomId;
+
+				friend.chip = 1;
+
+				friend.roomIndex = 1;
+
+				//delete invite..
+				delete inviteList [ data.inviteId ];
+
+				//initiliaze game..
+				initGame ( roomId );
+
+			}
+			
+			
+		}else {
+
+			
+			player.inviteId = '';
+
+			socket.emit ('pairingError',  { 'errorMsg' : 'Something Happened. Please try again.'  });
+
+		}
+	
+
 	});
 	
-	socket.on("gridClicked", function ( data ) {
-		//..
-		console.log ('received', playerList[socket.id].username );
+	socket.on('prepStarted', () => {
 
-		analyzeGridClicked ( data, socket.id );
+		const plyr = playerList [ socket.id ];
+
+		//..
+		const room = roomList [ plyr.roomId ];
+
+		room.prepCount ++;
+
+		if ( room.prepCount >= 2 ) room.startPrep();
 
 	});
 
-	socket.on("rematchRequest", function (data) {
+	socket.on('gameStarted', () => {
+
+		const plyr = playerList [ socket.id ];
+
+		//..
+		const room = roomList [ plyr.roomId ];
+
+		room.startCount ++;
+
+		if ( room.startCount >= 2 ) room.startGame ();
+
+	});
+
+	socket.on("playerReady", ( data ) => {
+
+		const plyr = playerList [ socket.id ];
+
+		plyr.isReady = true;
+
+		//..
+		const room = roomList [ plyr.roomId ];
+
+		for ( var i in data.pieces ) {
+
+			const truePost = plyr.roomIndex == 0 ? data.pieces [i].post : 71 - data.pieces [i].post;
+
+			const strId = 'plyr' + plyr.roomIndex + '_' + i;
+
+			room.pieces [ strId ] = new Piece ( strId, plyr.roomIndex, truePost, data.pieces [i].rank );
+
+			room.gridData [ truePost ] = { resident : plyr.roomIndex + 1, residentPiece : strId };
+
+		}
+
+		room.readyCount += 1;
+
+		if ( room.readyCount < 2 ) {	
+
+			for ( var i in room.players ) {
+
+				socketList [ room.players [i] ].emit ('playerIsReady', { player : room.players [i] == socket.id ? 'self' : 'oppo' });
+			}
+
+		}else {
+			
+			room.startCommencement();
+
+		}
+
+	});
+
+	socket.on("playerClick", data => {
+
+		if ( verifyMove (socket.id) ) {
+
+			const plyr = playerList [ socket.id ];
+
+			const room = roomList [ plyr.roomId ];
+
+			if ( data.post != -1 ) {
+				
+				const clickedPost = ( plyr.roomIndex == 0 ) ? data.post : 71 - data.post;
+
+				room.pieceToMove = room.gridData [ clickedPost ].residentPiece;
+
+			}else {
+
+				room.pieceToMove = '';
+			}
+
+			//console.log ( 'tomove', room.pieceToMove );
+
+			const oppoId = room.players [ plyr.roomIndex == 0 ? 1 : 0 ];
+
+			const post = data.post != -1 ? 71 - data.post : -1;
+
+			socketList [ oppoId ].emit ('oppoPieceClicked', { 'piecePost' : post });
+
+		}
+
+	});
+
+	socket.on("playerMove", data => {
+
+		if ( verifyMove (socket.id) ) {
+
+			makeTurn ( socket.id, data.gridPost );
+
+		}
+
+	});
+	
+	socket.on("playAgain", () => {
 		
 		var plyr = playerList [ socket.id ]
 		
-		plyr.requestsRematch = true;
-		
-		if ( bothPlayersRequestsRematch (plyr.roomid) ) {
-			
-			roomList[plyr.roomid].resetGame();
-			
-		}else {
-			
-			socket.emit ('waitingRematch', null );
+		var room = roomList [ plyr.roomId ];
+
+		room.toRematch += 1;
+
+		if ( room.toRematch > 1 ) {
+
+			for ( var i in room.players ) {
+
+				playerList [ room.players [i] ].rematch ();
+
+				socketList [ room.players [i] ].emit ('restartGame');
+			}
+
+			room.restartGame ();
+
 		}
-	});
-	
-	socket.on("leaveGame", function(data) {
-		
-		var plyr = playerList[socket.id];
-		
-		console.log ( 'left game', plyr.roomid );
-
-		leaveRoom ( socket.id, plyr.roomid );
 
 	});
+
+	socket.on("playerResigns", () => {
+		
+		var plyr = playerList [ socket.id ]
+		
+		var room = roomList [ plyr.roomId ];
+
+		for ( var i in room.players ) {
+
+			var winner = room.players[i] == socket.id ? 'oppo': 'self';
+
+			socketList [ room.players[i] ].emit ('playerHasResign', { 'winner': winner });
+
+		}
+
+		room.endGame ();
+
+	});
+
+	socket.on("playerReveals", () => {
+		
+		var plyr = playerList [ socket.id ]
 	
-	socket.on("disconnect",function () {
+		var room = roomList [ plyr.roomId ];
+
+		for ( var i in room.players ){
+
+			var plyrId = room.players[i] == socket.id ? 'self' : 'oppo';
+
+			var plyrInd = room.players[i] == socket.id ? 'oppo' : 'self';
+
+			var msg = room.players[i] == socket.id ? 'Your pieces are revealed to the opponent ' : 'Your opponent has revealed his/her pieces';
+
+			socketList [ room.players[i] ].emit ('playerHasRevealed', { 'plyr': plyrId, 'plyrInd': plyrInd, 'msg' : msg });
+
+		}
+
+	});
+
+	socket.on("playerOffersDraw", () => {
+		
+		var plyr = playerList [ socket.id ]
+		
+		if ( !plyr.hasOfferedDraw ) {
+
+			plyr.hasOfferedDraw = true;
+
+			var room = roomList [ plyr.roomId ];
+
+			if ( room.gameType == 1 ) room.toggleTimer ();
+
+			for ( var i in room.players ) {
+
+				var type = room.players[i] == socket.id ? 0 : 1;
+
+				socketList [ room.players[i] ].emit ('playerOfferedDraw', { 'type' : type, 'withTimer' : room.gameType });
+
+			}
+
+		}
+
+	});
+
+	socket.on("playerDrawResponse", data => {
+		
+		var plyr = playerList [ socket.id ]
+
+		var room = roomList [ plyr.roomId ];
+
+		if ( data.response == 1 ) {
+
+			for ( var i in room.players ) {
+				socketList [ room.players[i] ].emit ('gameIsADraw');
+			}
+
+			room.endGame ();
+
+		}else {
+
+			for ( var i in room.players ) {
+
+				var msg =  ( room.players[i] == socket.id ) ? 'Please wait. Game resumes.' : 'Opponent has declined. Game resumes.';
+
+				socketList [ room.players[i] ].emit ('playerDeclinesDraw', {  msg : msg });
+
+			}
+
+			setTimeout (() => {
+
+				for ( var i in room.players ) {
+
+					socketList [ room.players[i] ].emit ('resumeGame');
+				}
+
+				room.toggleTimer();
+
+			}, 2000 );
 			
 
+		}
+
+	});
+
+	socket.on("sendEmoji", ( data ) => {
+
+		var player = playerList [ socket.id ];
+
+		var room = roomList [ player.roomId ];
+
+		for ( var i in room.players ) {
+
+			var plyr =  ( room.players [i] == player.id ) ? 'self' : 'oppo';
+			
+			socketList [ room.players [i] ].emit ( 'showEmoji',  { 'plyr' : plyr, 'emoji' : data.emoji });
+
+		}
+
+	});
+
+	socket.on("leaveGame", (data) => {
+		
 		if ( playerList.hasOwnProperty(socket.id) ) {
-			
-			var plyr = playerList[socket.id];
-			
-			console.log ( 'disconnect', plyr.roomid );
 
-			if ( plyr.roomid != '' ) leaveRoom ( socket.id, plyr.roomid );
+			let plyr = playerList[socket.id];
 			
-			console.log ( '\n <-- ' + plyr.username  + ' has left the game.' );
+			//console.log ('<- ' + plyr.username + ' has left the game : ' + plyr.roomId );
+
+			if ( plyr.roomId != '' ) leaveRoom (socket.id);
+
+		}
+
+	});
+	
+	socket.on("disconnect", () => {
+			
+		if ( playerList.hasOwnProperty(socket.id) ) {
+
+			let plyr = playerList[socket.id];
+
+			//console.log ('<- ' + plyr.username + ' has been disconnected');
+
+			if ( plyr.roomId != '' ) leaveRoom ( plyr.id );
+
+			if ( plyr.inviteId != '') inviteList [ plyr.inviteId ].forceStop();
 
 			delete playerList [socket.id];
 
 		}
 
 		delete socketList [socket.id];
-		
+
+		const playersCount = Object.keys(socketList).length;
+
+		socket.broadcast.emit ('playersOnline', { 'playersCount' : playersCount });
+
 	});
-	
 
 });
 
 
-function getAvailableRoom () {
+function verifyMove ( socketId ) 
+{
 
-	for ( var i in roomList ) {
-		if ( roomList[i].playerCount == 1 ) return roomList[i].id;
+	let plyr = playerList [ socketId ];
+
+	let room = roomList [ plyr.roomId ];
+
+	if ( plyr.roomIndex == room.turn && room.isGameOn ) return true;
+
+	return false;
+
+}
+
+function makeTurn ( socketId, post ){
+
+	var plyr = playerList [ socketId ];
+
+	var room = roomList [ plyr.roomId ];
+
+	const destPost = (plyr.roomIndex == 1 ) ? 71 -post : post;
+
+	//
+	for ( var i in room.players ) {	
+
+		var plyrMoved = ( room.players [i] != socketId ) ? 'oppo' : 'self';
+
+		var postMove = ( room.players [i] != socketId ) ? 71 - post : post;
+
+		socketList [ room.players [i] ].emit ('playerHasMoved', {  plyr: plyrMoved, post : postMove });
+
 	}
+
+	//analyze move..
+	const movingPiece = room.pieces [ room.pieceToMove ];
+
+	//get origin
+	const origin = movingPiece.post;
+
+	// empty origin..
+	room.gridData [ origin ] = { resident : 0, residentPiece : '' };
+
+	movingPiece.post = destPost;
+
+	//check if destination is empty.. 
+	if ( room.gridData [ destPost ].resident == 0 ) { 
+
+		room.gridData [ destPost ] = { resident : movingPiece.player + 1, residentPiece : movingPiece.id };
+		
+	}else {
+
+		const residingPiece = room.pieces [ room.gridData [ destPost ].residentPiece ];
+
+		const clashResult = checkClash ( movingPiece.rank, residingPiece.rank );
+
+		if ( clashResult == 1 ) { 
+
+			//winner movingPiece..
+			room.gridData [ destPost ].resident = movingPiece.player + 1;
+
+			room.gridData [ destPost ].residentPiece = movingPiece.id;
+			
+			residingPiece.isCaptured = true;
+
+			//console.log ('winner moving piece');
+
+		}else if ( clashResult == 2 ) {
+
+			movingPiece.isCaptured = true;
+			
+			//console.log ('winner residing piece');
+
+		}else {
+
+			room.gridData [ destPost ].resident = 0;
+
+			room.gridData [ destPost ].residentPiece = '';
+			
+			residingPiece.isCaptured = true;
+			
+			movingPiece.isCaptured = true
+
+			//console.log ('its a tie');
+		}
+
+	}
+
+	room.pieceToMove = '';
+
+	//check winner...
+	const winnerAfterMove = checkWinner( room.id );
+
+	if (  winnerAfterMove >= 0 ) {
+
+		room.endGame( winnerAfterMove );
+
+	}else {
+
+		room.switchTurn();
+
+		//check winner after turn switch..
+		const winnerAfterTurn = checkWinner( room.id, true );
+		
+		if ( winnerAfterTurn >= 0 ) {
+			
+			room.endGame ( winnerAfterTurn );
+
+		}
+
+	}
+
+}
+
+function getNearbyResidents ( roomId, pos, res ) 
+{
+
+	var room = roomList [ roomId ];
+
+	const r = Math.floor ( pos/9 ), c = pos % 9;
+
+	let counter = 0;
+
+	if ( c-1 >=0 ) {
+
+		const left = (r * 9) + (c - 1);
+
+		if ( room.gridData [ left ].resident == res ) counter += 1;
+
+	}
+
+	if ( c+1 < 9 ) {
+
+		const right = (r * 9) + (c + 1);
+
+		if ( room.gridData [ right ].resident == res ) counter += 1;
+	}
+
+	if ( r-1 >= 0 ) {
+
+		const top = ( (r-1) * 9) + c;
+
+		if ( room.gridData [ top ].resident == res ) counter += 1
+
+	}
+
+	if ( r+1 < 8  ) {
+
+		const bottom = ( (r+1) * 9) + c;
+
+		if ( room.gridData [ bottom ].resident == res ) counter += 1;
+		
+	}
+	
+	return counter;
+
+}
+
+function checkWinner ( roomId, flagCheck = false ) 
+{
+	const room = roomList [roomId];
+
+	for ( var i in room.pieces ) {
+		
+		var piece = room.pieces [i];
+
+		if ( piece.rank == 14 ) {
+
+			if ( !flagCheck ) {  //check flag captured or flag is home with no adjacent opps..
+ 
+				if ( piece.isCaptured ) {
+
+					return (piece.player == 0 ) ? 1 : 0;
+	
+				}else {
+	
+					const res = piece.player == 0 ? 2 : 1;
+					
+					//console.log ( piece.player, piece.isHome(), getNearbyResidents( roomId, piece.post, res ) );
+
+					if ( piece.isHome() &&  getNearbyResidents( roomId, piece.post, res ) == 0 ) return piece.player;
+					
+				}
+
+			}else { // check flag is home only 
+
+				if ( (room.turn == piece.player) && piece.isHome() ) return piece.player;
+
+			}
+		
+		}
+	}
+
+	return -1;
+
+}
+
+function checkClash ( rankA, rankB )
+{
+
+	if ( rankA == 14 && rankB != 14 ) {  // A = Flag, B = Any except flag
+		return 2;
+	}
+	if ( rankB == 14 && rankA != 14 ) {  // B = Flag, A = Any except flag
+		return 1;
+	}
+	if ( rankA == 14 && rankB == 14 ) {  // A = Flag attacks B = Flag  -> winner : A
+		return 1;
+	}
+	if ( rankB == 14 && rankA == 14 ) {  // B = Flag attacks A = Flag  -> winner : B
+		return 2;
+	}
+	if ( rankA == 15 && rankB == 15 ) { // A = Spy, B = Spy -> no winner
+		return 0;
+	}
+	if ( rankA == 15 && rankB != 13 ) { // A = Spy, B != Private -> winner : A
+		return 1;
+	}
+	if ( rankB == 15 && rankA != 13 ) { // B = Spy, A != Private -> winner : B
+		return 2;
+	}
+	if ( rankA == 15 && rankB == 13 ) { // A = Spy, B == Private -> winner : B
+		return 2;
+	}
+	if ( rankB == 15 && rankA == 13 ) { // B = Spy, A == Private -> winner : A
+		return 1;
+	}
+	if ( rankA < rankB ) {
+		return 1;
+	}
+	if ( rankB < rankA ) {
+		return 2;
+	}
+	if ( rankB == rankA ) {
+		return 0;
+	}
+
 	return null;
 
 }
 
-function initGame ( playerIDs ) {
+function getPaired ( pairingId, playerId ) 
+{
 
-	for ( var i = 0; i < playerIDs.length; i++ ) {
+	for ( var i in playerList ) {
 
-		var counter = i == 0 ? 1 : 0;
+		let player = playerList [i];
 
-		var self = playerList [ playerIDs[i] ];
+		if ( player.pairingId == pairingId && player.id != playerId ) return i;
 
-		var oppo =  playerList [playerIDs[counter]];
-
-		var data = {
-			
-			'isSinglePlayer' : false,
-			'players' : {
-				'self' : self.username,
-				'oppo' : oppo.username
-			}
-
-		};
-
-		var socket = socketList [ playerIDs[i] ];
-
-		socket.emit ('initGame', data );
-
-	}
-
-}
-
-function checkPlayersAreReady ( roomID ) {
-
-	var gameRoom = roomList [roomID];
-
-	for ( var i = 0; i < gameRoom.playerCount; i++ ) {
-
-		var player = playerList [  gameRoom.playerIDs[i] ];
-
-		if ( !player.isReady ) return false;
-	}
-
-	return true;
-
-}
-
-function startGame ( roomID ) {
-
-	console.log ( '\n Game has started...', roomID );
-
-	var gameRoom = roomList[roomID];
-
-	gameRoom.startGame();
-
-	for ( var i=0; i<gameRoom.playerCount; i++) {
-
-		var socket = socketList [ gameRoom.playerIDs[i] ];
-
-		socket.emit ('startGame');
-	}
-
-} 
-
-function leaveRoom ( playerid, roomid ) {
-	
-	var player = playerList [playerid];
-
-	player.roomid = '';
-
-	if ( roomList.hasOwnProperty( roomid ) ) {
-		
-		var gameRoom = roomList [roomid];
-		
-		var index = gameRoom.playerIDs.indexOf ( playerid );
-		
-		gameRoom.playerIDs.splice ( index, 1);
-
-		gameRoom.playerCount += -1;
-
-		if ( gameRoom.playerCount > 0 ) {
-			
-			if ( gameRoom.isGameOn ) gameRoom.stopGame ();
-
-			var socket = socketList [ gameRoom.playerIDs[0] ];
-			
-			socket.emit ('opponentLeft', {} );
-			
-			console.log ( '\n <-- Opponent Left :', roomid  );
-
-		} else {
-			//...
-			delete roomList [roomid];
-
-			console.log ( '\n <-- Room deleted :', roomid  );
-
-		}
-
-		console.log ('\n <-- ' + player.username + ' has left the game room.' );
-
-	}
-	
-}
-
-function initGridData ( playerid, fleet ) {
-
-	var player = playerList [ playerid ];
-		
-	player.isReady = true;
-
-	player.fleet = fleet;
-
-	player.grid = [];
-
-	//initialize grid data..
-
-	for ( var z=0; z<100; z++) {
-
-		player.grid.push ( {
-			'isResided' : false,
-			'isTrashed' : false,
-			'index' :  -1
-		});
-
-	}	
-
-	//update grid data base on fleet data sent..
-
-	for ( var i=0; i<fleet.length; i++ ) {
-		
-		var rotation = fleet[i].rotation;
-
-		var len = fleet[i].length;
-
-		var index = fleet[i].index;
-
-		var post = fleet[i].post;
-
-
-		for ( var j=0;j<len;j++) {
-
-			player.grid [post].isResided = true;
-
-			player.grid [post].index = i;
-
-			if ( rotation == 0 ) {
-				post++;
-			}else {
-				post += 10;
-			}
-
-		}
-
-	}
-	
-	//...
-
-	
-}
-
-function sendGameData ( roomID ) { // gameproper...
-
-	var gameRoom = roomList[roomID];
-	
-	for ( var i=0; i< gameRoom.playerCount; i++) {
-			
-		var turn = ( i == gameRoom.turn ) ? 'self' : 'oppo'; 
-		
-		var self = playerList [ gameRoom.playerIDs [i] ];
-
-		var oppo = playerList [ gameRoom.playerIDs [ i == 0 ? 1 : 0 ] ];
-
-		var selfGrid = [], oppoGrid = [];
-
-		for ( var j = 0; j < 100; j++ ) {
-			
-			selfGrid.push ( { 
-				'isTrashed' : self.grid[j].isTrashed, 
-				'isResided' : (self.grid[j].isTrashed) ? self.grid[j].isResided : false,
- 				'index' :  self.grid[j].index 
-			});
-
-			oppoGrid.push ( { 
-				'isTrashed' : oppo.grid[j].isTrashed, 
-				'isResided' : (oppo.grid[j].isTrashed) ? oppo.grid[j].isResided : false,
- 				'index' :  oppo.grid[j].index 
-			});
-
-		}
-
-		var selfFleet = [], oppoFleet = [];
-
-		for ( var k = 0; k < 6; k++ ) {
-
-			selfFleet.push ({ 
-				'remains' : self.fleet[k].remains, 
-				'length' : self.fleet[k].length, 
-				'code' : self.fleet[k].code 
-			});
-
-			oppoFleet.push ({ 
-				'remains' : oppo.fleet[k].remains, 
-				'length' : oppo.fleet[k].length, 
-				'code' : oppo.fleet[k].code 
-			});
-
-		}
-
-		var data = {
-
-			'turn' : turn,
-
-			'self' : {
-				'grid' : selfGrid,
-				'fleet' : selfFleet
-			},
-			'oppo': {
-				'grid' : oppoGrid,
-				'fleet' : oppoFleet
-			}
-
-		};
-
-		console.log ( '\n <-- sent to', self.id );
-
-		var socket = socketList [ self.id ];
-
-		socket.emit ('sendData', data );
-
-	}
-
-}
-
-function analyzeGridClicked ( post, playerid ) {
-	
-	var isWinner = false;
-
-	var plyr = playerList[playerid];
-
-	var opponent = playerList [ getOpponentsId ( playerid ) ];
-
-	var room = roomList[plyr.roomid];
-
-	var isHit = ( opponent.grid[post].isResided ) ? true : false;
-
-	opponent.grid[post].isTrashed = true;
-
-	room.clickedPost = post;
-
-	room.isHit = isHit;
-
-	if ( isHit ) {
-
-		var shipIndex = opponent.grid[post].index;
-
-		opponent.fleet[shipIndex].remains += -1;
-
-		isWinner = checkWinner ( opponent.id );
-
-		if ( isWinner ) {
-			
-			room.isWinner = playerid;
-			
-			room.endGame ();
-
-		}else {
-
-			
-		}
-
-	}else {
-
-		
-	}
-
-	
-}
-
-function getOpponentsId ( playerid ) {
-	
-	var plyr = playerList[playerid];
-	
-	if ( plyr.roomid != '' ) {
-		
-		var index = roomList[ plyr.roomid ].playerIDs.indexOf( playerid );
-		
-		var oppIndex = ( index == 0 ) ? 1 : 0;
-		
-		return roomList[ plyr.roomid ].playerIDs[oppIndex];
 	}
 
 	return '';
 
 }
 
-function checkWinner ( playerid ) {
+function leaveRoom ( playerId ) 
+{
 
-	var fleet = playerList[playerid].fleet;
+	let player = playerList [ playerId ];
 
-	for ( var i=0; i<fleet.length; i++) {
-		if ( fleet[i].remains > 0 ) return false;
+	let gameRoom = roomList [ player.roomId ];
+
+	if ( gameRoom.players.length > 1 ) {
+
+		if ( gameRoom.isGameOn ) gameRoom.endGame ();
+
+		gameRoom.players.splice ( player.roomIndex, 1 );
+
+		const oppSocket = socketList [ gameRoom.players[0] ];
+
+		oppSocket.emit ('opponentLeft', {} );
+
+	} else {
+
+		delete roomList [ player.roomId ];
+
+		//console.log ( '-> room deleted :', player.roomId );
+
 	}
 
-	return true;
+	player.reset ();
+
 }
-//............
 
+function getAvailableRoom ( gameType ) 
+{
 
-
-
-
-
-resetGame = function (roomid) {
-	
-	var rm = roomList[roomid];
-	
-	for ( var i=0; i<rm.players.length; i++) {
-			
-		var socket = socketList [ rm.players[i] ];
+	for ( let i in roomList ) {
 		
-		playerList[rm.players[i]].resetGame();
-		
-		socket.emit ('resetGame', null );
+		let room = roomList [i];
+
+		if ( room.gameType == gameType && !room.isClosed ) return i;
 	}
+
+	return '';
 }
 
-sendErrorMessages = function ( playerid, msg ) {
+function initGame ( roomid ) 
+{
 
-	socketList[playerid].emit ('sendErrorMessage' , msg );
-}
+	var room = roomList [ roomid ];
 
-joinRoom = function ( playerid, roomid ) {
-	
-	var plyr = playerList[playerid];
+	for ( var i = 0; i < 2; i++ ) {
 
-	if ( roomList.hasOwnProperty( roomid ) ){
-		
-		if ( roomList[roomid].players.length < 2 ) {
-		
-			playerList[playerid].roomid = roomid;
-			playerList[playerid].gamePoints = 0;
-			playerList[playerid].gameid = roomList[roomid].players.length;
-			
-			roomList[roomid].players.push ( playerid );
-			
-			console.log ('\n --> []' + playerList[playerid].username + ' has joined the room ' + roomid );
-			
-			if ( roomList[roomid].players.length >= 2  ) {
-				roomList[roomid].initGame();
+		var self = playerList [ room.players [i] ];
+
+		var oppo = playerList [ room.players [i == 0 ? 1 : 0] ];
+
+		var data = {
+
+			'turn' : i == room.turn ? 'self' : 'oppo',
+			'game' : {
+				'multiplayer' : 1,
+				'timerOn' : room.gameType,
+				'time' : {
+					'prep' : room.prepTime,
+					'turn' : room.turnTime,
+				}
+			},
+			'players' : {
+				'self' : {
+					'username' : self.username,
+					'chip' : self.chip,
+				},
+				'oppo' : {
+					'username' : oppo.username,
+					'chip' : oppo.chip
+				}
 			}
-			
-			sendPlayersData();
-		}
-		
+
+		};
+
+		var socket = socketList [ self.id ];
+
+		socket.emit ('initGame', data );
+
 	}
-	//....
+
+	room.initGame ();
+
 }
-
-bothPlayersRequestsRematch = function ( roomid ) {
-	
-	var playersArr = roomList[roomid].players;
-	
-	for ( var i = 0; i < playersArr.length; i++ ) {
-		
-		if ( !playerList[ playersArr[i] ].requestsRematch ) return false;
-	}
-	return true;
-}
-
-
-
-isWinner = function ( oppoid ) {
-	var fleetData = playerList[oppoid].fleetData;
-	
-	for ( var i in fleetData ) {
-		if ( fleetData[i].cells.length !== fleetData[i].hitCount ) return false;
-	}
-	return true;
-}
-
 

@@ -28,7 +28,7 @@ class SceneA extends Phaser.Scene {
 
         this.selectedShip = '';
 
-        this.fieldCont = this.add.container ( 0, 0 );
+       
 
         this.turn = '';
 
@@ -37,6 +37,10 @@ class SceneA extends Phaser.Scene {
         this.gridPostShot = [];
 
         //..
+
+        this.add.image ( 960, 540, 'bg' );
+        
+        this.fieldCont = this.add.container ( 0, 0 );
 
         this.showPrompt ('Initializing..');
 
@@ -267,6 +271,16 @@ class SceneA extends Phaser.Scene {
                     }
 
                 });
+
+                // ship.setAlpha (0);
+
+                // this.tweens.add ({
+                //     targets: ship,
+                //     alpha : 1,
+                //     duration : 1000,
+                //     ease : 'Power3'
+                // });
+
                 
                 this.fieldCont.add ( ship );
 
@@ -570,21 +584,23 @@ class SceneA extends Phaser.Scene {
 
         }else {
 
-            var max = 10;
+            var max = 15;
 
             for ( var i = 0; i < max; i++ ) {
 
-                var xp = x + Math.cos ( Phaser.Math.DegToRad( 360/max * i )) * 10,
+                var xp = x + Math.cos ( Phaser.Math.DegToRad( 360/max * i )) * 20,
 
-                    yp = y - Math.sin ( Phaser.Math.DegToRad( 360/max * i )) * 10;
+                    yp = y - Math.sin ( Phaser.Math.DegToRad( 360/max * i )) * 20;
 
                 
                 let str = this.add.star ( xp, yp, 5, 5, 10, 0xff3333, 1 );
 
+                var vel = Phaser.Math.Between ( 80, 120 );
+                
                 this.add.tween ({
                     targets : str,
-                    x :  x + Math.cos ( Phaser.Math.DegToRad( 360/max * i )) * 80,
-                    y :  y - Math.sin ( Phaser.Math.DegToRad( 360/max * i )) * 80,
+                    x :  x + Math.cos ( Phaser.Math.DegToRad( 360/max * i )) * vel,
+                    y :  y - Math.sin ( Phaser.Math.DegToRad( 360/max * i )) * vel,
                     alpha : 0,
                     duration : 1000,
                     ease : 'Power2',
@@ -597,7 +613,6 @@ class SceneA extends Phaser.Scene {
 
 
         }
-
 
     }
 
