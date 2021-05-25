@@ -10,9 +10,11 @@ class SceneA extends Phaser.Scene {
 
     }
 
-    create ()
+    create ( data )
     {
 
+        console.log ( data );
+        
         this.fleetData = [
             { frm : 0, len:5, type: 'carrier'},
             { frm : 1, len:4, type: 'battleship'},
@@ -28,21 +30,21 @@ class SceneA extends Phaser.Scene {
 
         this.selectedShip = '';
 
-       
-
         this.turn = '';
 
         this.playersData = {};
 
         this.gridPostShot = [];
 
+        this.timerIsTicking = false;
+
         //..
 
         this.add.image ( 960, 540, 'bg' );
-        
-        this.fieldCont = this.add.container ( 0, 0 );
 
-        this.showPrompt ('Initializing..');
+        this.initSoundFx();
+
+        this.initSocketIO();
 
         this.initPlayers ();
 
@@ -50,12 +52,300 @@ class SceneA extends Phaser.Scene {
 
         this.createField ();
 
+        this.showPrompt ('Initializing..', 40, 0, true );
+
+        let brgr = this.add.image (1844, 76, 'burger').setInteractive().setDepth (9999);
+
+        brgr.on('pointerover', () => {
+            brgr.setFrame(1);
+        });
+        brgr.on('pointerout', () => {
+            brgr.setFrame(0);
+        });
+        brgr.on('pointerdown', () => {
+
+            this.playSound ('clicka');
+            
+            brgr.setFrame(2);
+        });
+        brgr.on('pointerup', () => {
+            
+            brgr.setFrame(0);
+
+        });
+
         this.time.delayedCall ( 1000, this.startPrep, [], this );
 
     }   
 
+    playMusic ( off = false ){
+
+        if ( off ) {
+            this.bgmusic.pause();
+        }else {
+            this.bgmusic.resume();
+        }
+
+    }
+
+    playSound  ( snd, vol=0.5 ) {
+
+        if ( !this.soundOff) this.soundFx.play ( snd, { volume : vol });
+
+    }
+
+    initPlayers () {
+
+
+        const names = ['Nong', 'Chalo', 'Nasty', 'Caloy'];
+
+        let oppoUsername = '', 
+            
+            oppoAI = false, 
+            
+            oppoChip = 0;
+
+        if ( !this.gameData.game.multiplayer  ) {
+
+            oppoUsername = names [ Phaser.Math.Between (0, names.length - 1) ] + ' (CPU)';
+
+            oppoAI = true;
+
+            oppoChip = this.gameData.players ['self'].chip == 0 ? 1 : 0;
+
+        }  else {
+
+            oppoUsername = this.gameData.players ['oppo'].username;
+
+            oppoChip = this.gameData.players ['oppo'].chip;
+            
+        }   
+
+        //..
+        this.players ['self'] = new Player ('self', this.gameData.players['self'].username, this.gameData.players['self'].chip );
+
+        this.players ['oppo'] = new Player ('oppo', oppoUsername, oppoChip, oppoAI );
+
+        this.turn = this.gameData.turn;     
+    
+    }
+
+    initSoundFx () 
+    {
+        //sfx
+        this.soundFx = this.sound.addAudioSprite('sfx');
+
+        //bg music..
+        this.bgmusic = this.sound.add('sceneabg').setVolume(0.1).setLoop(true);
+
+        this.bgmusic.play();
+
+    
+    }
+
+    initSocketIO () 
+    {
+
+        socket.on ('playerHasMoved', data => {
+
+            //console.log ( data );
+
+            this.removeBlinkers ();
+
+            this.makeTurn ( data.plyr, data.post );
+
+        });
+
+        socket.on ('oppoPieceClicked', data => {
+
+            //console.log ( data );
+
+            if ( data.piecePost != -1 ) {
+
+                this.piecesCont.getByName ( this.gridData [ data.piecePost ].residentPiece ).setPicked ();
+
+                this.pieceClicked = this.gridData [ data.piecePost ].residentPiece;
+
+                this.createBlinkers ( data.piecePost, 2, false );
+
+            }else {
+
+                if ( this.pieceClicked != '' ) {
+
+                    this.piecesCont.getByName ( this.pieceClicked ).setPicked ( false );
+
+                    this.pieceClicked = '';
+
+                    this.removeBlinkers ();
+
+                }
+                
+            }
+
+        });
+
+        socket.on ('playerIsReady', data => {
+           
+            this.players [data.player].isReady = true;
+
+            this.playerIndicatorsCont.getByName (data.player).ready();
+
+        });
+
+        socket.on ('endPrepTime', () => {
+
+            //console.log ('hey end');
+            if ( this.timerIsTicking ) this.stopTimer ();
+
+            this.endPrep ();
+            
+        });
+
+        socket.on ('endTurn', () => {
+
+            if ( this.timerIsTicking ) this.stopTimer ();
+
+            this.endTurn ();
+            
+        });
+        
+        socket.on('playerHasResign', data => {
+
+            this.endGame (data.winner);
+
+        });
+
+        socket.on ('commenceGame', data => {
+
+            //..create oppo pieces..todo..
+            this.createGamePieces ('oppo', false, data.oppoPiece );
+
+            //..
+            this.startCommencement ();
+
+        });
+
+        socket.on('showEmoji', data => { 
+            
+            this.time.delayedCall (500, () => {
+
+                //if ( this.sentEmojisShown ) this.removeSentEmojis();
+
+                this.showSentEmojis ( data.plyr, data.emoji );
+
+            }, [], this);
+
+        });
+
+        socket.on('restartGame', () => {
+            this.resetGame ();
+        });
+
+        socket.on('opponentLeft', () => {
+            
+            this.gameOver = true;
+
+            if ( this.timerIsTicking ) this.stopTimer();
+
+            if ( this.isPrompted ) this.removePrompt();
+
+            const btnArr = [ { 'txt' : 'Exit',  'func' : () => this.leaveGame() } ];
+
+            this.showPrompt ('Opponent has left the game.', 40, -20, false, btnArr );
+
+        });
+
+        socket.on('playerMove', data => {
+            
+            //console.log ( data );
+
+            this.makeTurn ( data.col, data.turn );
+
+        });
+
+        socket.on('playerHasRevealed', data => {
+
+            this.playSound ('warp');
+
+            this.revealPieces ( data.plyr );
+
+            this.playerIndicatorsCont.getByName( data.plyrInd ).showReveal();
+
+            this.showPrompt (data.msg, 28, 0, true );
+
+
+
+            this.time.delayedCall ( 1500, () => this.removePrompt(), [], this );
+
+        });
+
+        socket.on('playerOfferedDraw', data => {
+
+            if ( data.withTimer ) this.toggleTimer ();
+
+            if ( data.type == 0 ) {
+
+                this.showPrompt ('Waiting for response..', 34, 0, true );
+
+            }else {
+
+                this.showDrawOfferPrompt();
+            }
+            
+
+        });
+        
+        socket.on('playerDeclinesDraw', data => {
+
+            this.showPrompt (data.msg, 30, 0, true );
+
+        });
+
+        socket.on('resumeGame', () => {
+
+            this.removePrompt();
+
+            this.toggleTimer ();
+
+        });
+
+        socket.on('gameIsADraw', () => {
+            
+            this.endGame ('');
+
+        });
+        
+
+
+    }
+
     initPlayers ()
     {
+
+        const names = ['Nong', 'Chalo', 'Nasty', 'Caloy'];
+
+        // if ( !this.gameData.game.multiplayer  ) {
+
+        //     oppoUsername = names [ Phaser.Math.Between (0, names.length - 1) ] + ' (CPU)';
+
+        //     oppoAI = true;
+
+        //     oppoChip = this.gameData.players ['self'].chip == 0 ? 1 : 0;
+
+        // }  else {
+
+        //     oppoUsername = this.gameData.players ['oppo'].username;
+
+        //     oppoChip = this.gameData.players ['oppo'].chip;
+            
+        // }   
+
+        //..
+        // this.players ['self'] = new Player ('self', this.gameData.players['self'].username, this.gameData.players['self'].chip );
+
+        // this.players ['oppo'] = new Player ('oppo', oppoUsername, oppoChip, oppoAI );
+
+        // this.turn = this.gameData.turn; 
 
         this.playersData ['self'] = new Player ( 'self', 'Nong', false );
 
@@ -81,7 +371,6 @@ class SceneA extends Phaser.Scene {
     endPrep ()
     {
         //..
-        console.log ('this');
 
         this.removeControls();
 
@@ -90,6 +379,8 @@ class SceneA extends Phaser.Scene {
             for ( var i = 0; i < 6; i++ ) {
                 this.fieldCont.getByName ('self_ship' + i ).removeInteractive().select(false);
             }
+
+            if ( this.timerIsTicking ) this.stopTimer ();
 
             this.createFleet ('oppo', false );
 
@@ -102,23 +393,76 @@ class SceneA extends Phaser.Scene {
         
     }
 
-    showPrompt ( txt )
-    {
-        var rct = this.add.rectangle (960, 540, 350, 100, 0x0a0a0a, 0.5 );
+    startTimer ( phase = 0 ) {
 
-        var txt = this.add.text (960, 540, txt, { color:'#fff', fontFamily:'Oswald', fontSize:30 }).setOrigin(0.5);
+        var time = ( phase == 0 ) ? this.gameData.game.time.prep : this.gameData.game.time.turn;
 
-        this.promptCont = this.add.container (0, 0, [ rct, txt ]);
+        var del = 50, totalTick = time*1000/del;
+
+        this.timerIsTicking = true;
+
+        this.timerPaused = false;
+
+        this.timerCount = 0;
+
+        this.gameTimer = setInterval(() => {
+
+            if (!this.timerPaused ) {
+
+                this.timerCount ++;
+
+                if ( this.timerCount < totalTick ){
+
+                    var progress = this.timerCount/totalTick;
+
+                    if ( phase == 0) {
+
+                        for ( var i in this.players) {
+        
+                            if ( !this.players[i].isReady ) this.playerIndicatorsCont.getByName (i).tick ( progress );
+                        }
+
+                    }else {
+
+                        this.playerIndicatorsCont.getByName ( this.turn).tick ( progress );
+                    }
+
+                }else {
+
+                    this.stopTimer ();
+
+                    if ( phase == 0 ) {
+                        this.endPrep ();
+                    }else {
+                        this.endTurn ();
+                    }
+
+                }
+            }
+                
+        }, del);
 
     }
 
-    removePrompt ()
-    {
-        this.promptCont.destroy ();
+    toggleTimer () {
+        this.timerPaused = !this.timerPaused;
+    }
+
+    stopTimer () {  
+
+        this.timerCount = 0;
+
+        this.timerPaused = true;
+
+        this.timerIsTicking = false;
+
+        clearInterval ( this.gameTimer );
+
     }
 
     createPlayerIndicators ()
     {
+       
         this.playerIndicators = this.add.container (0, -70);
 
         var pW = 700, pS = 100;
@@ -131,16 +475,8 @@ class SceneA extends Phaser.Scene {
 
         for ( var i in this.playersData ) {
 
-            var cont = this.add.container ( px + counter * (pW + pS), py ).setName ( i );
-
-            var img = this.add.image ( 0, 0, 'pind' );
-
-            var ttxt = this.add.text ( -240, -20, this.playersData[i].username, { color:'#646464', fontFamily:'Oswald', fontSize: 34 }).setOrigin (0, 0.5);
-
-            var wins = this.add.text ( -240, 20, 'Wins: 0', { color:'#9e9e9e', fontFamily:'Oswald', fontSize: 28 }).setOrigin (0, 0.5);
-
-            cont.add ( [img, ttxt, wins ]);
-
+            var cont = new Indicator ( this, px + counter * (pW + pS), py, i, this.playersData[i].username, false );
+            
             this.playerIndicators.add ( cont );
 
             counter ++;
@@ -163,6 +499,8 @@ class SceneA extends Phaser.Scene {
 
     createField ()
     {
+
+        this.fieldCont = this.add.container ( 0, 0 );
 
         this.playersGridData = { self : [], oppo : [] };
 
@@ -456,46 +794,6 @@ class SceneA extends Phaser.Scene {
 
     }
 
-    startCommencement ()
-    {
-        this.showCommenceScreen ();
-    }
-
-    showCommenceScreen () 
-    {
-        var rct = this.add.rectangle (960, 540, 350, 100, 0x0a0a0a, 0.5 );
-
-        var txt = this.add.text (960, 540, 'Game starts in 3..', { color:'#fff', fontFamily:'Oswald', fontSize:30 }).setOrigin(0.5);
-
-        var counter = 0;
-
-        var myTimer = setInterval (() => {
-
-            counter++;
-            console.log ( counter );
-
-            txt.text = 'Game starts in ' + ( 3 - counter ) + '..';
-
-            if ( counter >= 3 ) {
-
-                clearInterval (myTimer);
-
-                this.endCommencement ();
-            }
-
-        }, 1000 )
-
-        this.commenceScreenCont = this.add.container (0, 0, [ rct, txt ]);
-    }
-
-    endCommencement ()
-    {
-        this.commenceScreenCont.destroy ();
-
-        this.startGame ();
-
-    }
-
     cellPick ( cellid ) {
 
         if ( this.isGameOn ) {
@@ -640,17 +938,6 @@ class SceneA extends Phaser.Scene {
         if ( this.myGame.withTimer ) {
             //todo..
         }
-
-    }
-
-    endGame ( winner )
-    {
-
-        console.log ('winner', winner );
-
-        this.activateCells (false);
-
-        this.isGameOn = false;
 
     }
 
@@ -885,6 +1172,440 @@ class SceneA extends Phaser.Scene {
         return arr;
     }
     
+    startCommencement () {
+
+        if ( this.timerIsTicking ) this.stopTimer ();
+
+        for ( var i in this.players ) {
+
+            var inds = this.playerIndicatorsCont.getByName (i);
+
+            if ( !inds.isReady ) inds.ready ();
+
+        }
+
+        // if ( !this.controlsHidden ) this.showControls (false);
+
+        this.time.delayedCall ( 800, () => this.showCommenceScreen (), [], this);
+
+    }
+
+    showCommenceScreen ()
+    {
+
+        //this.commenceElements = [];
+
+        this.commenceCont= this.add.container (960, 540);
+
+        //const rct = this.add.rectangle ( 0, 0, 300, 250 );
+
+        const img0 = this.add.image ( -20, 40, 'commence');
+
+        const img1 = this.add.image ( 60, -40, 'commence').setScale(0.7);
+
+        const img2 = this.add.image ( -20, -60, 'commence').setScale (0.5);
+
+        const commence = this.add.text ( 0, 0, '3', {color:'#333', fontFamily:'Oswald', fontSize: 120 }).setStroke('#ddd', 5 ).setOrigin(0.5);
+
+        this.commenceCont.add ([ img0, img1, img2, commence ]);
+
+        //start commence timer..
+
+        this.tweens.add ({
+            targets : [img0, img2 ],
+            rotation : '+=1',
+            duration : 1000,
+            repeat : 3,
+            ease : 'Cubic.easeIn'
+        });
+
+        this.tweens.add ({
+            targets : img1,
+            rotation : '-=1',
+            duration : 1000,
+            repeat : 3,
+            ease : 'Cubic.easeIn'
+        });
+
+        this.playSound ('beep');
+        
+        let counter = 0;
+
+        this.time.addEvent ({
+            delay : 1000,
+            callback : () => {
+
+                counter += 1;
+
+                commence.text = ( 3 - counter );
+
+                this.playSound ( (counter >= 3) ? 'bell' : 'beep' );
+
+                if ( counter >= 3 ) {
+
+                    this.commenceCont.destroy();
+
+                    this.startGame ();
+
+                }
+
+            },
+            callbackScope : this,
+            repeat : 2
+        });
+
+
+    }
+
+    showPrompt ( myTxt, fs = 40, txtPos = 0, sm = false, btnArr = [] ) {
+
+        if ( this.isPrompted ) this.removePrompt ();
+
+        this.isPrompted = true;
+
+        this.promptCont = this.add.container (0,0);
+
+        let rct = this.add.rectangle ( 960, 540, 1920, 1080, 0x0a0a0a, 0.4 ).setInteractive ();
+
+        rct.on('pointerdown', function () {
+            // this.scene.removePrompt();
+        });
+
+        this.promptCont.add ( rct );
+
+        let miniCont = this.add.container ( 960, 1350 );
+
+        let img = this.add.image ( 0, 0, sm ? 'prompt_sm' : 'prompt_main' );
+
+        let txt = this.add.text (  0, txtPos, myTxt, { fontSize: fs, fontFamily:'Oswald', color: '#6e6e6e' }).setOrigin(0.5);
+
+        miniCont.add ([ img, txt ]);
+
+        if ( btnArr.length > 0 ) {
+
+            const bw = 190, bh = 80, sp = 20;
+
+            const bx = ((btnArr.length * (bw + sp)) - sp)/-2  + bw/2, 
+        
+                  by = 90;
+
+            for ( let i = 0; i < btnArr.length; i++ ) {
+                
+                let btn = new MyButton ( this, bx + i*(bw+sp), by, bw, bh, i, 'promptbtns', '', '',  btnArr [i].txt, 30 );
+
+                btn.on('pointerup', function () {
+
+                    this.btnState('idle');
+
+                    btnArr [i].func();
+
+                });
+                btn.on('pointerdown', function () {
+                    
+                    this.btnState ('pressed');
+
+                    this.scene.playSound ('clicka');
+
+                });
+
+                miniCont.add ( btn );
+
+            }
+
+
+
+        }
+
+        this.promptCont.add( miniCont );
+
+
+        this.add.tween ({
+            targets : this.promptCont.last,
+            y : 540,
+            duration : 400,
+            easeParams : [ 1.1, 0.8 ],
+            ease : 'Elastic',
+            delay : 100
+        });
+
+
+    }
+
+    removePrompt () 
+    {
+        this.isPrompted = false;
+
+        this.promptCont.destroy();
+    }
+
+    createEmojis () {
+
+        this.emojiContainer = this.add.container ( 0, -1080 ).setDepth (999);
+
+        let rct = this.add.rectangle ( 0, 0, 1920, 1080 ).setOrigin(0).setInteractive ();
+
+        rct.on('pointerdown', () => {
+            
+            this.playSound ('clicka');
+
+            this.showEmojis (false);
+        });
+
+        let bgimg = this.add.image ( 1650, 480, 'emojibg').setInteractive();
+
+        this.emojiContainer.add ( [ rct, bgimg ] );
+
+        const sx = 1595, sy = 260;
+
+        for ( let i=0; i<12; i++) {
+
+            let ix = Math.floor ( i/2 ), iy = i%2;
+
+            let cont = this.add.container ( sx + iy * 110, sy + ix* 95 ).setSize (100, 100).setInteractive();
+
+
+            let rct = this.add.rectangle ( 0, 0, 90, 90, 0xffffff, 0.6 ).setVisible (false);
+
+            let img = this.add.image (  0, 0, 'emojis', i ).setScale ( 0.9 );
+
+            cont.add ([rct, img]);
+
+            cont.on('pointerover', function () {
+                this.first.setVisible ( true );
+            });
+            cont.on('pointerout', function () {
+                this.first.setVisible ( false );
+            });
+            cont.on('pointerdown', function () {
+
+                this.scene.playSound ('clicka');
+
+            });
+            cont.on('pointerup', function () {
+                
+                this.first.setVisible ( false );
+
+                this.scene.showEmojis ( false );
+
+                this.scene.sendEmoji ( i );                
+            
+            });
+
+            this.emojiContainer.add ( cont );
+
+        }
+
+    }
+
+    showEmojis ( show = true ) 
+    {
+        this.isEmoji = show;
+
+        this.add.tween ({
+            targets : this.emojiContainer,
+            y : show ? 0 : -1080,
+            duration : 300,
+            easeParams : [ 1.2, 0.8 ],
+            ease : 'Elastic' 
+        });
+
+    }
+
+    sendEmoji ( emoji ) {
+
+        if ( !this.gameData.game.multiplayer ) {
+
+            this.time.delayedCall ( 500, () => {
+
+                this.showSentEmojis ('self', emoji );
+
+            }, [], this );
+
+
+            this.time.delayedCall ( 2000, () => {
+
+                this.showSentEmojis ('oppo', Math.floor ( Math.random() * 12 ));
+
+            }, [], this);
+
+
+        }else {
+
+            socket.emit ('sendEmoji', { 'emoji' : emoji });
+        }
+
+        //...disable emoji btns for 2 secs..
+        this.controlBtnsCont.getByName('emoji').removeInteractive();
+
+        this.time.delayedCall ( 4000, () => {
+            this.controlBtnsCont.getByName('emoji').setInteractive();
+        }, [], this );
+
+    }
+
+    showSentEmojis ( plyr, emoji ) {
+        
+        this.playSound ('message');
+
+        const xp = plyr == 'self' ? 490 : 1102, yp = 173;
+
+        this.sentEmojisShown = true;
+
+        const emojiContainer = this.add.container ( xp, yp );
+
+        const bgimg = this.add.image ( 0, 0, 'emojibubble' );
+
+        const emojiimg = this.add.image ( -2, 2, 'emojis', emoji ).setScale(0.9);
+        
+        this.add.tween ({
+            targets : emojiimg,
+            y : '+=3',
+            duration : 100,
+            yoyo : true,
+            ease : 'Power3',
+            repeat : 5
+        });
+
+        emojiContainer.add ([bgimg, emojiimg]);
+
+        this.emojiTimer = this.time.delayedCall ( 2000, () => {
+
+           emojiContainer.destroy ();
+
+        }, [], this );
+
+    }
+
+    endGame ( winner ) {
+
+        this.isGameOn = false;
+
+        console.log ('winner', winner );
+
+        this.activateCells (false);
+
+        //if ( this.timerIsTicking ) this.stopTimer ();
+
+        if ( winner != '' ) {
+
+            this.playersData [ winner ].wins += 1;
+
+            this.playerIndicators.getByName ( winner ).setWins ( this.playersData [ winner ].wins );
+
+        }
+
+        this.time.delayedCall ( 300, () => {
+            
+            this.playSound ('xyloriff', 0.3);
+
+            this.showEndPrompt ( winner );
+
+        }, [], this );
+
+    }
+
+    resetGame () {
+
+        if ( this.isPrompted ) this.removePrompt ();
+
+        this.showPrompt ('Game is restarting..', 36, 0, true );
+
+        this.switchMainControls ( 0 );
+
+        this.pieceClicked = '';
+
+        //remove blinker if any..
+        this.blinkersCont.each ( child => {
+            child.destroy ();
+        });
+
+        //remove all pieces..
+        this.piecesCont.each ( child => {
+            child.destroy ();
+        });
+
+        this.capturedCont.last.each ( child => {
+            child.destroy ();
+        });
+        
+        for ( var i in this.gridData ) {
+           
+            this.gridData [i].resident = 0;
+
+            this.gridData [i].residentPiece = '';
+
+        }
+
+        for (var j in this.players ){
+
+            this.playerIndicatorsCont.getByName (j).reset ();
+
+            this.players [j].isReady = false;
+
+            this.capturedCounter [j] = 0;
+        }
+
+        this.time.delayedCall (1000, function () {
+           
+            this.removePrompt ();
+           
+            this.gameOver = false;
+
+            this.switchPieces ();
+
+            this.startPrep ();
+            
+        }, [], this);
+
+    }
+
+    showEndPrompt ( winner ) {
+
+       
+        let txt = '';
+
+        switch (winner) {
+            case 'self':
+                txt = 'Congrats, You Win';
+                break;
+            case 'oppo':
+                txt = 'Sorry, You Lose';
+                break;
+            default:
+                txt = 'This game is a draw.';
+                break;
+        }
+
+        const btnArr = [
+
+            { 
+                'txt' : 'Play Again', 
+                'func' : () => this.playerRematch ()
+            },
+            { 
+                'txt' : 'Exit', 
+                'func' : () => this.leaveGame()
+            },
+
+        ];
+
+        this.showPrompt ( txt, 40, -20, false, btnArr );
+
+    }
+
+    leaveGame () {
+
+        socket.emit ('leaveGame');
+
+        socket.removeAllListeners();
+
+        if ( this.timerIsTicking ) this.stopTimer ();
+
+        this.bgmusic.stop();
+
+        this.scene.start ('Intro');
+    }
+
     update ( time, delta ) {
         //console.log ( time, delta  )
     }

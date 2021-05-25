@@ -50,7 +50,7 @@ class Intro extends Phaser.Scene {
         //add menu..
         this.menuCont = this.add.container (0, 0);
 
-        this.menuTxt = this.add.text ( 960, 480, '- Select Play -', { color:'#6e6e6e', fontSize: 34, fontFamily:'Oswald'}).setOrigin(0.5);
+        this.menuTxt = this.add.text ( 960, 460, '- Select Play -', { color:'#3a3a3a', fontSize: 34, fontFamily:'Oswald'}).setOrigin(0.5);
        
 
         this.createMenu ();
@@ -140,7 +140,7 @@ class Intro extends Phaser.Scene {
     
         const bw = 762, bh = 110, bsp = 20;
 
-        const txtArr = ['Play Vs CPU', 'Play Vs Online', 'Play vs Friend', 'Back To Main Menu', 'Classic', 'Blitz' ];
+        const txtArr = ['Play vs CPU', 'Play vs Online', 'Play vs Friend', 'Back To Main Menu', 'Classic', 'Blitz' ];
         //add menu
         this.menuTxt.text = !last ? '- Select Play -' : '- Select Game Type -';
 
