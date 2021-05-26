@@ -38,6 +38,7 @@ class SceneA extends Phaser.Scene {
 
         this.timerIsTicking = false;
 
+        this.controlPanelShown = false;
         //..
 
         this.add.image ( 960, 540, 'bg' );
@@ -71,6 +72,10 @@ class SceneA extends Phaser.Scene {
         brgr.on('pointerup', () => {
             
             brgr.setFrame(0);
+
+            this.controlPanelShown = !this.controlPanelShown;
+
+            this.showControls ( this.controlPanelShown );
 
         });
 
@@ -372,7 +377,7 @@ class SceneA extends Phaser.Scene {
     {
         //..
 
-        this.removeControls();
+        this.showControls( false );
 
         if ( this.myGame.singlePlayer ) {
 
@@ -635,49 +640,45 @@ class SceneA extends Phaser.Scene {
         //..
 
         // x = 1410, y = 554
+        this.controlPanelShown = true;
 
-        var rct = this.add.rectangle (0, 0, 400, 200, 0xffffff, 0.9 );
-
-        var txt = this.add.text (0, -75, 'Controls', { color:'#6e6e6e', fontFamily:'Oswald', fontSize:22 }).setOrigin(0.5);
+        var rct = this.add.image (0, 0, 'controlsBg');
 
         var buts0 = new MyButton ( this, 0, -20, 300, 60, 'but0', '', '', 0, 'Random', 32 );
 
         buts0.on('pointerup', () => {
-
             this.randomFleet ();
-
         });
 
         var buts1 = new MyButton ( this, 0, 50, 300, 60, 'but1', '', '', 0, 'Ready', 32 );
 
         buts1.on('pointerup', () => {
-
             this.endPrep ();
         });
 
-        this.controlsCont = this.add.container (1385, 1180, [ rct, txt, buts0, buts1 ] );
+        this.controlsCont = this.add.container (1385, 1280, [ rct, buts0, buts1 ] );
 
         this.add.tween ({
             targets : this.controlsCont,
             y : 554,
             duration : 200,
-            ease : 'Power2'
+            easeParams : [ 1.1, 0.6],
+            ease : 'Elastic',
+            delay : 1000
         });
-
 
     }
 
-    removeControls () 
+    showControls ( show = true) 
     {
+        this.controlPanelShown = show;
 
         this.add.tween ({
             targets : this.controlsCont,
-            y : 1180,
+            y : show ? 540 : 1280,
             duration : 200,
-            ease : 'Power2',
-            onComplete : () => {
-                this.controlsCont.destroy ();
-            }
+            easeParams : [ 1.1, 0.8],
+            ease : 'Elastic'
         });
     }
 
