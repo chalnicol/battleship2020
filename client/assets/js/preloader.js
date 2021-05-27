@@ -45,7 +45,13 @@ class Preloader extends Phaser.Scene {
 
         this.load.image('commence', 'client/assets/images/commence.png');
 
-        this.load.image('controlsBg', 'client/assets/images/controls_bg.png');
+        //this.load.image('controlsBg', 'client/assets/images/controls_bg.png');
+
+        this.load.image('controlsBg', 'client/assets/images/controlsBg.png');
+
+        this.load.spritesheet('imgBtns', 'client/assets/images/imgBtns.png', { frameWidth: 100, frameHeight: 100 });
+        
+        this.load.spritesheet('conts_sm', 'client/assets/images/controls_sm.png', { frameWidth: 100, frameHeight: 100 });
 
         this.load.spritesheet('contBtns', 'client/assets/images/controls_xl.png', { frameWidth: 160, frameHeight: 160 });
 

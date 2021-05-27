@@ -55,29 +55,30 @@ class SceneA extends Phaser.Scene {
 
         this.showPrompt ('Initializing..', 40, 0, true );
 
-        let brgr = this.add.image (1844, 76, 'burger').setInteractive().setDepth (9999);
+        // let brgr = this.add.image (1844, 76, 'burger').setInteractive().setDepth (9999);
 
-        brgr.on('pointerover', () => {
-            brgr.setFrame(1);
-        });
-        brgr.on('pointerout', () => {
-            brgr.setFrame(0);
-        });
-        brgr.on('pointerdown', () => {
+        // brgr.on('pointerover', () => {
+        //     brgr.setFrame(1);
+        // });
+        // brgr.on('pointerout', () => {
+        //     brgr.setFrame(0);
+        // });
+        // brgr.on('pointerdown', () => {
 
-            this.playSound ('clicka');
+        //     this.playSound ('clicka');
             
-            brgr.setFrame(2);
-        });
-        brgr.on('pointerup', () => {
+        //     brgr.setFrame(2);
+        // });
+        // brgr.on('pointerup', () => {
             
-            brgr.setFrame(0);
+        //     brgr.setFrame(0);
 
-            this.controlPanelShown = !this.controlPanelShown;
+        //     this.controlPanelShown = !this.controlPanelShown;
 
-            this.showControls ( this.controlPanelShown );
+        //     this.showControls ( this.controlPanelShown );
 
-        });
+        // });
+
 
         this.time.delayedCall ( 1000, this.startPrep, [], this );
 
@@ -635,7 +636,7 @@ class SceneA extends Phaser.Scene {
 
     }
 
-    createControls ()
+    createControlsa ()
     {
         //..
 
@@ -649,7 +650,6 @@ class SceneA extends Phaser.Scene {
         buts0.on('pointerdown', () => {
             this.playSound ('clicka');
         });
-
         buts0.on('pointerup', () => {
             this.randomFleet ();
         });
@@ -659,7 +659,6 @@ class SceneA extends Phaser.Scene {
         buts1.on('pointerdown', () => {
             this.playSound ('clicka');
         });
-        
         buts1.on('pointerup', () => {
             this.endPrep ();
         });
@@ -678,6 +677,139 @@ class SceneA extends Phaser.Scene {
         });
 
     }
+
+    createControls ()
+    {
+        
+        //..
+        //add burger for controls
+        let brgr = this.add.image (1844, 66, 'burger').setInteractive().setDepth (9999);
+
+        brgr.on('pointerover', () => {
+            brgr.setFrame(1);
+        });
+        brgr.on('pointerout', () => {
+            brgr.setFrame(0);
+        });
+        brgr.on('pointerdown', () => {
+
+            this.playSound ('clicka');
+            
+            brgr.setFrame(2);
+        });
+        brgr.on('pointerup', () => {
+            
+            brgr.setFrame(0);
+
+            if ( this.capturedScreenShown ) this.showCaptured ( false );
+
+            if ( this.isEmoji ) this.showEmojis (false);
+
+            this.controlsHidden = !this.controlsHidden;
+
+            this.showControls ( !this.controlsHidden );
+
+        });
+
+        const cntW = 800, cntH = 380;
+
+        this.controlBtnsCont = this.add.container ( 1020, 0).setDepth (9999);
+
+        const rct = this.add.image ( 395, 355, 'controlsBg' ).setInteractive ();
+
+        const rcta = this.add.rectangle ( 33, 355, 66, 380 ).setInteractive ();
+
+        rcta.on('pointerup', () => {
+            this.playSound ('clicka');
+            this.showControls (false);
+        });
+
+        this.controlBtnsCont.add ( [rct, rcta] );
+
+        
+        //..
+
+        const btnsTop = 250, btnsLeft = 180;
+
+        const btnArr = [
+
+            { 
+                name : 'leave', 
+                desc : 'Leave Game',
+                func : () => {
+
+                    if ( this.gameOver ) {
+
+                        this.leaveGame ();
+
+                    }else {
+
+                        this.showControls ( false );
+                        this.showExitPrompt ();
+
+                    }
+                   
+                }
+            },
+            { 
+                name : 'emoji', 
+                desc : 'Send Emoji',
+                func : () => {
+                    this.showEmojis ();
+                    this.showControls ( false );
+                }
+            },
+            { 
+                name : 'sound', 
+                desc : 'Sound On/Off',
+                func : () => {
+                    this.soundOff = !this.soundOff;
+                }
+            },
+            { 
+                name : 'music', 
+                desc : 'Music On/Off',
+                func : () => {
+                    this.musicOff = !this.musicOff;
+                    this.playMusic ( this.musicOff );
+                }
+            },
+
+        ];
+
+        for ( let i=0; i<btnArr.length; i++ ) {
+
+            let xp = btnsLeft + (i * 150), yp = btnsTop;
+
+            let btnCont = new MyButton ( this, xp, yp, 100, 100, btnArr[i].name, 'conts_sm', 'imgBtns', i ).setName ( btnArr[i].name );
+
+            btnCont.on('pointerup', function () {
+                
+                this.btnState ('idle');
+
+                if ( i >= 2 ) this.toggle ( i + 2 );
+
+                btnArr [ i ].func ();
+
+            });
+
+            btnCont.on('pointerdown', function () {
+                
+                this.btnState ('pressed');
+
+                this.scene.playSound ('clicka');
+              
+            });
+
+            const txt = this.add.text (xp, yp + 70, btnArr[i].desc, { color : '#fff', fontFamily:'Oswald', fontSize: 20 }).setOrigin(0.5);
+
+            this.controlBtnsCont.add ( [btnCont, txt] );
+
+        }
+
+
+    }
+    
 
     showControls ( show = true) 
     {
