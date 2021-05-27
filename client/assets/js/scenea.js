@@ -53,32 +53,13 @@ class SceneA extends Phaser.Scene {
 
         this.createField ();
 
+        this.createEmojis();
+
+        this.createControls();
+
+        this.activateDrag ();
+
         this.showPrompt ('Initializing..', 40, 0, true );
-
-        // let brgr = this.add.image (1844, 76, 'burger').setInteractive().setDepth (9999);
-
-        // brgr.on('pointerover', () => {
-        //     brgr.setFrame(1);
-        // });
-        // brgr.on('pointerout', () => {
-        //     brgr.setFrame(0);
-        // });
-        // brgr.on('pointerdown', () => {
-
-        //     this.playSound ('clicka');
-            
-        //     brgr.setFrame(2);
-        // });
-        // brgr.on('pointerup', () => {
-            
-        //     brgr.setFrame(0);
-
-        //     this.controlPanelShown = !this.controlPanelShown;
-
-        //     this.showControls ( this.controlPanelShown );
-
-        // });
-
 
         this.time.delayedCall ( 1000, this.startPrep, [], this );
 
@@ -368,17 +349,33 @@ class SceneA extends Phaser.Scene {
 
         this.createFleet('self'); 
 
-        this.activateDrag ();
+        this.time.delayedCall ( 300, () => {
 
-        this.createControls();
+            this.showControls();
+
+            if ( this.myGame.withTimer ) {
+
+                this.playerIndicatorsCont.getByName ('self').showTimer();
+
+                this.startTimer ();
+
+                if ( !this.myGame.singlePlayer == 1 ) socket.emit ('prepStarted');
+                
+            } 
+
+        }, [], this );
 
     }
 
     endPrep ()
     {
         //..
+        //deactive main btns..
+        for ( var i = 0; i<2; i++ ) {
+            this.controlBtnsCont.getByName ('mainBtn' + i ).setBtnEnabled (false);
+        }
 
-        this.showControls( false );
+        if ( this.controlPanelShown ) this.showControls( false );
 
         if ( this.myGame.singlePlayer ) {
 
@@ -395,6 +392,11 @@ class SceneA extends Phaser.Scene {
         }else {
 
             //todo..
+            if ( !this.players['self'].isReady ) {
+
+                //todo send grid data..
+            }
+            
         }
         
     }
@@ -636,48 +638,6 @@ class SceneA extends Phaser.Scene {
 
     }
 
-    createControlsa ()
-    {
-        //..
-
-        // x = 1410, y = 554
-        this.controlPanelShown = true;
-
-        var rct = this.add.image (0, 0, 'controlsBg');
-
-        var buts0 = new MyButton ( this, -90, 20, 160, 160, 'but0', 'contBtns', '', 0, 'Random', 32 );
-
-        buts0.on('pointerdown', () => {
-            this.playSound ('clicka');
-        });
-        buts0.on('pointerup', () => {
-            this.randomFleet ();
-        });
-
-        var buts1 = new MyButton ( this, 90, 20, 160, 160, 'but1', 'contBtns', '', 0, 'Ready', 32 );
-
-        buts1.on('pointerdown', () => {
-            this.playSound ('clicka');
-        });
-        buts1.on('pointerup', () => {
-            this.endPrep ();
-        });
-
-        
-
-        this.controlsCont = this.add.container (1385, 1280, [ rct, buts0, buts1 ] ).setDepth (999);
-
-        this.add.tween ({
-            targets : this.controlsCont,
-            y : 554,
-            duration : 200,
-            easeParams : [ 1.1, 0.6],
-            ease : 'Elastic',
-            delay : 1000
-        });
-
-    }
-
     createControls ()
     {
         
@@ -701,19 +661,13 @@ class SceneA extends Phaser.Scene {
             
             brgr.setFrame(0);
 
-            if ( this.capturedScreenShown ) this.showCaptured ( false );
-
             if ( this.isEmoji ) this.showEmojis (false);
 
-            this.controlsHidden = !this.controlsHidden;
-
-            this.showControls ( !this.controlsHidden );
+            this.showControls ( !this.controlPanelShown );
 
         });
 
-        const cntW = 800, cntH = 380;
-
-        this.controlBtnsCont = this.add.container ( 1020, 0).setDepth (9999);
+        //const cntW = 800, cntH = 380;
 
         const rct = this.add.image ( 395, 355, 'controlsBg' ).setInteractive ();
 
@@ -724,12 +678,12 @@ class SceneA extends Phaser.Scene {
             this.showControls (false);
         });
 
-        this.controlBtnsCont.add ( [rct, rcta] );
+        this.controlBtnsCont = this.add.container ( 1920, 0,  [rct, rcta]).setDepth (9999);
 
-        
+
         //..
 
-        const btnsTop = 250, btnsLeft = 180;
+        const btnsLeft = 200, btnsTop = 250;
 
         const btnArr = [
 
@@ -808,22 +762,202 @@ class SceneA extends Phaser.Scene {
         }
 
 
+        const mainBtnArr = [
+            { 
+                name : 'random', 
+                desc : 'Random',
+                func : () => this.randomFleet()
+                
+            },
+            { 
+                name : 'ready', 
+                desc : 'Ready',
+                func : () => this.endPrep()
+                
+            },
+
+        ];
+
+        for ( let j=0; j<mainBtnArr.length; j++ ) {
+
+            let xpa = btnsLeft + (j * 150), ypa = btnsTop + 170;
+
+            let btnConta = new MyButton ( this, xpa, ypa, 100, 100, mainBtnArr[j].name, 'conts_sm', 'imgBtns',  j+7 ).setName ( 'mainBtn' + j  );
+
+            btnConta.on('pointerup', function () {
+                
+                this.btnState ('idle');
+
+                mainBtnArr [ j ].func ();
+
+            });
+
+            btnConta.on('pointerdown', function () {
+                
+                this.btnState ('pressed');
+
+                this.scene.playSound ('clicka');
+              
+            });
+
+            const txta = this.add.text (xpa, ypa + 70, mainBtnArr[j].desc, { color : '#fff', fontFamily:'Oswald', fontSize: 20 }).setOrigin(0.5);
+
+            this.controlBtnsCont.add ( [btnConta, txta ] );
+
+        }
+
     }
-    
 
     showControls ( show = true) 
     {
         this.controlPanelShown = show;
 
         this.add.tween ({
-            targets : this.controlsCont,
-            y : show ? 540 : 1280,
+            targets : this.controlBtnsCont,
+            x : show ? 1120 : 1920,
             duration : 200,
-            easeParams : [ 1.1, 0.8],
-            ease : 'Elastic'
+            ease : 'Power2'
         });
     }
 
+    createEmojis () {
+
+        this.emojiContainer = this.add.container ( 0, -1080 ).setDepth (999);
+
+        let rct = this.add.rectangle ( 0, 0, 1920, 1080 ).setOrigin(0).setInteractive ();
+
+        rct.on('pointerdown', () => {
+            
+            this.playSound ('clicka');
+
+            this.showEmojis (false);
+        });
+
+        let bgimg = this.add.image ( 1650, 480, 'emojibg').setInteractive();
+
+        this.emojiContainer.add ( [ rct, bgimg ] );
+
+        const sx = 1595, sy = 260;
+
+        for ( let i=0; i<12; i++) {
+
+            let ix = Math.floor ( i/2 ), iy = i%2;
+
+            let cont = this.add.container ( sx + iy * 110, sy + ix* 95 ).setSize (100, 100).setInteractive();
+
+
+            let rct = this.add.rectangle ( 0, 0, 90, 90, 0xffffff, 0.6 ).setVisible (false);
+
+            let img = this.add.image (  0, 0, 'emojis', i ).setScale ( 0.9 );
+
+            cont.add ([rct, img]);
+
+            cont.on('pointerover', function () {
+                this.first.setVisible ( true );
+            });
+            cont.on('pointerout', function () {
+                this.first.setVisible ( false );
+            });
+            cont.on('pointerdown', function () {
+
+                this.scene.playSound ('clicka');
+
+            });
+            cont.on('pointerup', function () {
+                
+                this.first.setVisible ( false );
+
+                this.scene.showEmojis ( false );
+
+                this.scene.sendEmoji ( i );                
+            
+            });
+
+            this.emojiContainer.add ( cont );
+
+        }
+
+    }
+
+    showEmojis ( show = true ) 
+    {
+        this.isEmoji = show;
+
+        this.add.tween ({
+            targets : this.emojiContainer,
+            y : show ? 0 : -1080,
+            duration : 300,
+            easeParams : [ 1.2, 0.8 ],
+            ease : 'Elastic' 
+        });
+
+    }
+
+    sendEmoji ( emoji ) {
+
+        if ( this.myGame.singlePlayer ) {
+
+            this.time.delayedCall ( 500, () => {
+
+                this.showSentEmojis ('self', emoji );
+
+            }, [], this );
+
+
+            this.time.delayedCall ( 2000, () => {
+
+                this.showSentEmojis ('oppo', Math.floor ( Math.random() * 12 ));
+
+            }, [], this);
+
+
+        }else {
+
+            socket.emit ('sendEmoji', { 'emoji' : emoji });
+        }
+
+        //...disable emoji btns for 2 secs..
+        this.controlBtnsCont.getByName('emoji').removeInteractive();
+
+        this.time.delayedCall ( 4000, () => {
+            this.controlBtnsCont.getByName('emoji').setInteractive();
+        }, [], this );
+
+    }
+
+    showSentEmojis ( plyr, emoji ) {
+        
+        this.playSound ('message');
+
+        const xp = plyr == 'self' ? 300 : 1100, yp = 188;
+
+        this.sentEmojisShown = true;
+
+        const emojiContainer = this.add.container ( xp, yp );
+
+        const bgimg = this.add.image ( 0, 0, 'emojibubble' );
+
+        const emojiimg = this.add.image ( -2, 2, 'emojis', emoji ).setScale(0.9);
+        
+        this.add.tween ({
+            targets : emojiimg,
+            y : '+=3',
+            duration : 100,
+            yoyo : true,
+            ease : 'Power3',
+            repeat : 5
+        });
+
+        emojiContainer.add ([bgimg, emojiimg]);
+
+        this.emojiTimer = this.time.delayedCall ( 2000, () => {
+
+           emojiContainer.destroy ();
+
+        }, [], this );
+
+    }
+    
     randomFleet ()
     {
         for ( var i = 0; i < 6; i++ ) {
@@ -842,6 +976,8 @@ class SceneA extends Phaser.Scene {
 
             if ( gameObject.isSelected ) {
 
+                this.playSound ('clickc');
+
                 this.fieldCont.bringToTop(gameObject);
 
                 gameObject.origin = { x:gameObject.x, y: gameObject.y };
@@ -855,6 +991,8 @@ class SceneA extends Phaser.Scene {
         this.input.on('dragend', function (pointer, gameObject) {
 
             if ( gameObject.isSelected ) {
+
+                this.playSound ('clickc');
 
                 var cell = this.getCellHit ( 'self', gameObject );
 
@@ -1426,11 +1564,11 @@ class SceneA extends Phaser.Scene {
 
         if ( btnArr.length > 0 ) {
 
-            const bw = 190, bh = 80, sp = 20;
+            const bw = 190, bh = 80, sp = 15;
 
             const bx = ((btnArr.length * (bw + sp)) - sp)/-2  + bw/2, 
         
-                  by = 90;
+                  by = 80;
 
             for ( let i = 0; i < btnArr.length; i++ ) {
                 
@@ -1481,141 +1619,15 @@ class SceneA extends Phaser.Scene {
         this.promptCont.destroy();
     }
 
-    createEmojis () {
-
-        this.emojiContainer = this.add.container ( 0, -1080 ).setDepth (999);
-
-        let rct = this.add.rectangle ( 0, 0, 1920, 1080 ).setOrigin(0).setInteractive ();
-
-        rct.on('pointerdown', () => {
-            
-            this.playSound ('clicka');
-
-            this.showEmojis (false);
-        });
-
-        let bgimg = this.add.image ( 1650, 480, 'emojibg').setInteractive();
-
-        this.emojiContainer.add ( [ rct, bgimg ] );
-
-        const sx = 1595, sy = 260;
-
-        for ( let i=0; i<12; i++) {
-
-            let ix = Math.floor ( i/2 ), iy = i%2;
-
-            let cont = this.add.container ( sx + iy * 110, sy + ix* 95 ).setSize (100, 100).setInteractive();
+    showExitPrompt () {
 
 
-            let rct = this.add.rectangle ( 0, 0, 90, 90, 0xffffff, 0.6 ).setVisible (false);
+        const btnArr = [
+            { 'txt' : 'Proceed', 'func' : () => this.leaveGame () },
+            { 'txt' : 'Cancel', 'func' : () => this.removePrompt () }
+        ];
 
-            let img = this.add.image (  0, 0, 'emojis', i ).setScale ( 0.9 );
-
-            cont.add ([rct, img]);
-
-            cont.on('pointerover', function () {
-                this.first.setVisible ( true );
-            });
-            cont.on('pointerout', function () {
-                this.first.setVisible ( false );
-            });
-            cont.on('pointerdown', function () {
-
-                this.scene.playSound ('clicka');
-
-            });
-            cont.on('pointerup', function () {
-                
-                this.first.setVisible ( false );
-
-                this.scene.showEmojis ( false );
-
-                this.scene.sendEmoji ( i );                
-            
-            });
-
-            this.emojiContainer.add ( cont );
-
-        }
-
-    }
-
-    showEmojis ( show = true ) 
-    {
-        this.isEmoji = show;
-
-        this.add.tween ({
-            targets : this.emojiContainer,
-            y : show ? 0 : -1080,
-            duration : 300,
-            easeParams : [ 1.2, 0.8 ],
-            ease : 'Elastic' 
-        });
-
-    }
-
-    sendEmoji ( emoji ) {
-
-        if ( !this.gameData.game.multiplayer ) {
-
-            this.time.delayedCall ( 500, () => {
-
-                this.showSentEmojis ('self', emoji );
-
-            }, [], this );
-
-
-            this.time.delayedCall ( 2000, () => {
-
-                this.showSentEmojis ('oppo', Math.floor ( Math.random() * 12 ));
-
-            }, [], this);
-
-
-        }else {
-
-            socket.emit ('sendEmoji', { 'emoji' : emoji });
-        }
-
-        //...disable emoji btns for 2 secs..
-        this.controlBtnsCont.getByName('emoji').removeInteractive();
-
-        this.time.delayedCall ( 4000, () => {
-            this.controlBtnsCont.getByName('emoji').setInteractive();
-        }, [], this );
-
-    }
-
-    showSentEmojis ( plyr, emoji ) {
-        
-        this.playSound ('message');
-
-        const xp = plyr == 'self' ? 490 : 1102, yp = 173;
-
-        this.sentEmojisShown = true;
-
-        const emojiContainer = this.add.container ( xp, yp );
-
-        const bgimg = this.add.image ( 0, 0, 'emojibubble' );
-
-        const emojiimg = this.add.image ( -2, 2, 'emojis', emoji ).setScale(0.9);
-        
-        this.add.tween ({
-            targets : emojiimg,
-            y : '+=3',
-            duration : 100,
-            yoyo : true,
-            ease : 'Power3',
-            repeat : 5
-        });
-
-        emojiContainer.add ([bgimg, emojiimg]);
-
-        this.emojiTimer = this.time.delayedCall ( 2000, () => {
-
-           emojiContainer.destroy ();
-
-        }, [], this );
+        this.showPrompt ( 'Are you sure you want to leave?', 34, -30, false, btnArr );
 
     }
 
@@ -1653,39 +1665,17 @@ class SceneA extends Phaser.Scene {
 
         this.showPrompt ('Game is restarting..', 36, 0, true );
 
-        this.switchMainControls ( 0 );
-
-        this.pieceClicked = '';
-
-        //remove blinker if any..
-        this.blinkersCont.each ( child => {
-            child.destroy ();
-        });
-
-        //remove all pieces..
-        this.piecesCont.each ( child => {
-            child.destroy ();
-        });
-
-        this.capturedCont.last.each ( child => {
-            child.destroy ();
-        });
         
-        for ( var i in this.gridData ) {
-           
-            this.gridData [i].resident = 0;
-
-            this.gridData [i].residentPiece = '';
-
-        }
-
         for (var j in this.players ){
 
             this.playerIndicatorsCont.getByName (j).reset ();
 
             this.players [j].isReady = false;
 
-            this.capturedCounter [j] = 0;
+            for ( var i = 0; i < 100; i++ ) {
+                this.playersGridData [j] = 0;
+            }
+
         }
 
         this.time.delayedCall (1000, function () {
@@ -1693,8 +1683,6 @@ class SceneA extends Phaser.Scene {
             this.removePrompt ();
            
             this.gameOver = false;
-
-            this.switchPieces ();
 
             this.startPrep ();
             
