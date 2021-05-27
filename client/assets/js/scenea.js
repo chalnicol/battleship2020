@@ -644,19 +644,29 @@ class SceneA extends Phaser.Scene {
 
         var rct = this.add.image (0, 0, 'controlsBg');
 
-        var buts0 = new MyButton ( this, 0, -20, 300, 60, 'but0', '', '', 0, 'Random', 32 );
+        var buts0 = new MyButton ( this, -90, 20, 160, 160, 'but0', 'contBtns', '', 0, 'Random', 32 );
+
+        buts0.on('pointerdown', () => {
+            this.playSound ('clicka');
+        });
 
         buts0.on('pointerup', () => {
             this.randomFleet ();
         });
 
-        var buts1 = new MyButton ( this, 0, 50, 300, 60, 'but1', '', '', 0, 'Ready', 32 );
+        var buts1 = new MyButton ( this, 90, 20, 160, 160, 'but1', 'contBtns', '', 0, 'Ready', 32 );
 
+        buts1.on('pointerdown', () => {
+            this.playSound ('clicka');
+        });
+        
         buts1.on('pointerup', () => {
             this.endPrep ();
         });
 
-        this.controlsCont = this.add.container (1385, 1280, [ rct, buts0, buts1 ] );
+        
+
+        this.controlsCont = this.add.container (1385, 1280, [ rct, buts0, buts1 ] ).setDepth (999);
 
         this.add.tween ({
             targets : this.controlsCont,
